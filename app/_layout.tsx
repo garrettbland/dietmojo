@@ -56,10 +56,10 @@ export default function RootLayout() {
                             }}
                         />
                         <Stack.Screen
-                            name="progress"
+                            name="measurements"
                             options={{
                                 presentation: 'modal',
-                                title: 'Progress',
+                                title: 'Measurements',
                                 headerShown: false,
                             }}
                         />
@@ -101,6 +101,19 @@ export default function RootLayout() {
                             }}
                         />
                         <Stack.Screen
+                            name="editfood"
+                            options={{
+                                presentation: 'formSheet',
+                                sheetAllowedDetents: [0.6, 1],
+                                title: 'Edit Food',
+                                headerTransparent: true,
+                                sheetGrabberVisible: true,
+                                contentStyle: {
+                                    backgroundColor: '#fff', // This removes the glow
+                                },
+                            }}
+                        />
+                        <Stack.Screen
                             name="takephoto"
                             options={{
                                 presentation: 'modal',
@@ -111,13 +124,14 @@ export default function RootLayout() {
                         <Stack.Screen
                             name="settings"
                             options={{
-                                // headerShown: true,
+                                presentation: 'modal',
+                                headerShown: false,
                                 // headerTransparent: true,
-                                headerTitle: 'Settings',
-                                headerLargeTitleEnabled: true,
-                                headerBackButtonDisplayMode:
-                                    'minimal',
-                                headerTransparent: true,
+                                // headerTitle: 'Settings',
+                                // headerLargeTitleEnabled: true,
+                                // headerBackButtonDisplayMode:
+                                //     'minimal',
+                                // headerTransparent: true,
                                 //headerBlurEffect: "systemMaterial",
                             }}
                         />

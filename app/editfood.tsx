@@ -1,7 +1,6 @@
-// import { Link } from "expo-router";
 import { IconSymbol } from '@/components/ui/icon-symbol'
-import { addEntry } from '@/lib/addEntry'
 import { formatDateForSQL } from '@/lib/date'
+import { updateFoodEntry } from '@/lib/updateEntry' // Assuming this function exists, similar to addFoodEntry
 import { useDate } from '@/providers/DateProvider'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
@@ -11,7 +10,7 @@ import {
     useNavigation,
     useRouter,
 } from 'expo-router'
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import {
     Alert,
     Pressable,
@@ -25,46 +24,34 @@ import {
     useSafeAreaInsets,
 } from 'react-native-safe-area-context'
 
-// import { ThemedText } from '@/components/themed-text';
-// import { ThemedView } from '@/components/themed-view';
-
-export default function AddFood() {
+export default function EditFood() {
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const { date, setDate } = useDate()
 
-    /**
-     * tempPhotoUri is the uri of the photo taken in the TakePhoto screen.
-     * We use local search params to pass it back to this screen without saving it
-     * to the db first. If the user confirms adding the food, then we can save the photo
-     * permanently and save the new uri in the db along with the food entry.
-     */
-    const { tempPhotoUri } = useLocalSearchParams()
-    const [previewUri, setPreviewUri] = useState<string | null>(null)
+    const { foodItem: foodItemParam } = useLocalSearchParams()
+    const foodItem = JSON.parse(foodItemParam as string) // Parse the food item from params
+
+    const [previewUri, setPreviewUri] = useState<string | null>(
+        foodItem.photo_uri
+    )
     const navigation = useNavigation()
-    const [foodName, setFoodName] = useState('')
-    const [calories, setCalories] = useState('')
-    const [protein, setProtein] = useState('')
-    const [carbs, setCarbs] = useState('')
-    const [fat, setFat] = useState('')
+    const [foodName, setFoodName] = useState(foodItem.name)
+    const [calories, setCalories] = useState(
+        foodItem.calories.toString()
+    )
+    const [protein, setProtein] = useState(
+        foodItem.protein.toString()
+    )
+    const [carbs, setCarbs] = useState(foodItem.carbs.toString())
+    const [fat, setFat] = useState(foodItem.fat.toString())
 
-    /**
-     * Whenever tempPhotoUri changes (i.e. when we come back from the TakePhoto screen),
-     * update the previewUri to show the user a preview of the photo they just took.
-     * This way they can confirm it's correct before saving the food entry.
-     * If they didn't take a photo, tempPhotoUri will be undefined and we won't show any preview.
-     */
-    useEffect(() => {
-        if (tempPhotoUri) {
-            setPreviewUri(tempPhotoUri as string)
-        }
-    }, [tempPhotoUri])
-
-    const handleAddFood = async () => {
-        const { message } = await addEntry({
+    const handleUpdateFood = async () => {
+        const { message } = await updateFoodEntry({
+            id: foodItem.id, // Assuming foodItem has an id
             name: foodName,
             photo_uri: previewUri ?? null,
-            consumed_at: formatDateForSQL(date), // use the date from DateProvider
+            consumed_at: formatDateForSQL(date), // Or use foodItem.consumed_at if editing date is not allowed
             calories: parseInt(calories) || 0,
             protein: parseInt(protein) || 0,
             carbs: parseInt(carbs) || 0,
@@ -74,21 +61,17 @@ export default function AddFood() {
         })
 
         if (message === 'SUCCESS') {
-            // router.dismiss()
             router.dismissTo({
                 pathname: '/',
                 params: {
-                    status: 'SUCCESSFULLY_ADDED_FOOD',
-                    message: `Successfully added ${foodName}`, // to do: make this message more informative and user friendly
+                    status: 'SUCCESSFULLY_UPDATED_FOOD',
+                    message: `Successfully updated ${foodName}`,
                 },
             })
         } else {
-            /**
-             * To do: logging
-             */
             Alert.alert(
                 'Error',
-                'Failed to add food entry. Please try again.'
+                'Failed to update food entry. Please try again.'
             )
         }
     }
@@ -98,16 +81,15 @@ export default function AddFood() {
         navigation.setOptions({
             headerRight: () => (
                 <Pressable
-                    onPress={handleAddFood}
+                    onPress={handleUpdateFood}
                     style={{
-                        height: 36, // somethiing about a height and width of 36 centers
+                        height: 36,
                         width: 36,
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
                     }}
                 >
-                    {/* <IconSymbol size={26} name="xmark" color={"black"} /> */}
                     <IconSymbol
                         size={26}
                         name="checkmark"
@@ -118,10 +100,6 @@ export default function AddFood() {
         })
     }, [navigation])
 
-    /**
-     * Grabbed this from the expo docs. Does it even work?
-     * https://docs.expo.dev/versions/latest/sdk/image/#usage
-     */
     const blurhash =
         '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj['
 
@@ -145,7 +123,7 @@ export default function AddFood() {
             <Stack.Toolbar placement="right">
                 <Stack.Toolbar.Button
                     icon={'checkmark'}
-                    onPress={handleAddFood}
+                    onPress={handleUpdateFood}
                 />
             </Stack.Toolbar>
             <Stack.Toolbar placement="left">
@@ -215,6 +193,7 @@ export default function AddFood() {
                                 borderWidth: 1,
                             }}
                             onChangeText={setFoodName}
+                            value={foodName}
                             placeholder="What did you eat?"
                             returnKeyType="done"
                         />
@@ -243,6 +222,7 @@ export default function AddFood() {
                                         borderWidth: 1,
                                     }}
                                     onChangeText={setCalories}
+                                    value={calories}
                                     placeholder="0"
                                     keyboardType="numeric"
                                 />
@@ -263,6 +243,7 @@ export default function AddFood() {
                                         borderWidth: 1,
                                     }}
                                     onChangeText={setProtein}
+                                    value={protein}
                                     placeholder="0"
                                     keyboardType="numeric"
                                 />
@@ -283,6 +264,7 @@ export default function AddFood() {
                                         borderWidth: 1,
                                     }}
                                     onChangeText={setCarbs}
+                                    value={carbs}
                                     placeholder="0"
                                     keyboardType="numeric"
                                 />
@@ -303,6 +285,7 @@ export default function AddFood() {
                                         borderWidth: 1,
                                     }}
                                     onChangeText={setFat}
+                                    value={fat}
                                     placeholder="0"
                                     keyboardType="numeric"
                                 />

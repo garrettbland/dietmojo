@@ -1,45 +1,128 @@
 import { SimpleDayNavigator } from '@/components/SimpleDayNavigator'
 import { IconSymbol } from '@/components/ui/icon-symbol'
+import { deleteFoodItem } from '@/lib/deleteEntry'
+import { getEntriesByDate } from '@/lib/getEntries'
 import { useDate } from '@/providers/DateProvider'
+import { FoodEntry } from '@/types/types'
 import Ionicons from '@expo/vector-icons/Ionicons'
-import { useRouter } from 'expo-router'
+import { Image } from 'expo-image'
+import {
+    useLocalSearchParams,
+    usePathname,
+    useRouter,
+} from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import {
+    Alert,
+    Pressable,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import {
     SafeAreaView,
     useSafeAreaInsets,
 } from 'react-native-safe-area-context'
 
+const RightAction = (onDelete: () => void) => (
+    <TouchableOpacity
+        onPress={onDelete}
+        style={{
+            backgroundColor: 'red',
+            justifyContent: 'center',
+            padding: 20,
+        }}
+    >
+        <Text style={{ color: 'white' }}>Delete</Text>
+    </TouchableOpacity>
+)
+
+/**
+ * Grabbed this from the expo docs. Does it even work?
+ * https://docs.expo.dev/versions/latest/sdk/image/#usage
+ */
+const blurhash =
+    '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj['
+
 const App = () => {
     const router = useRouter()
+    const pathname = usePathname()
     const insets = useSafeAreaInsets()
     const { date, setDate } = useDate()
     const [entries, setEntries] = useState<FoodEntry[]>([])
     const [loading, setLoading] = useState(false)
 
-    const fetchFoodEntriesByDay = async (date: Date) => {
-        try {
-            // Format date as YYYY-MM-DD for consistent comparison
-            const dateString = date.toISOString().split('T')[0]
+    const { status, message } = useLocalSearchParams()
 
-            return []
-        } catch (error) {
-            console.error('Error fetching food entries:', error)
-            return []
-        }
+    const loadEntries = async () => {
+        setLoading(true)
+        const data = await getEntriesByDate(date)
+        setEntries(data)
+        setLoading(false)
     }
 
     // Fetch entries when date changes
     useEffect(() => {
-        const loadEntries = async () => {
-            setLoading(true)
-            const data = await fetchFoodEntriesByDay(date)
-            setEntries(data)
-            setLoading(false)
-        }
+        /**
+         * Only fetch entries if we're on the home screen.
+         * This prevents refetching when we navigate back from add food or other screens.
+         *  We still want to refetch when date changes or when screen is focused,
+         * but not on every navigation event.
+         */
+        // if (pathname !== '/') {
+        //     return
+        // }
 
         loadEntries()
-    }, [date])
+    }, [date]) // also refetch when screen is focused
+
+    useEffect(() => {
+        if (status === 'SUCCESSFULLY_ADDED_FOOD') {
+            loadEntries()
+        }
+
+        if (status === 'SUCCESSFULLY_UPDATED_FOOD') {
+            loadEntries()
+        }
+
+        router.setParams({ status: undefined })
+    }, [status])
+
+    const handleDelete = (id: number) => {
+        Alert.alert(
+            'Confirm Delete',
+            'Are you sure you want to delete this entry?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        deleteFoodItem(id).then(({ message }) => {
+                            if (message === 'SUCCESS') {
+                                // Filter out deleted entry. No need to refetch entire list from db
+                                const filteredEntries =
+                                    entries.filter(
+                                        (entry) => entry.id !== id
+                                    )
+                                setEntries(filteredEntries)
+                            } else {
+                                Alert.alert(
+                                    'Error',
+                                    'Failed to delete entry. Please try again.'
+                                )
+                            }
+                        })
+                    },
+                },
+            ]
+        )
+    }
 
     return (
         <>
@@ -59,7 +142,7 @@ const App = () => {
                         }}
                     >
                         {/* Title */}
-                        <View>
+                        {/* <View>
                             <Text
                                 style={{
                                     fontSize: 30,
@@ -69,6 +152,28 @@ const App = () => {
                                 Diet Mojo
                             </Text>
                             <Text>Track your meals</Text>
+                        </View> */}
+
+                        {/** Date */}
+                        <View>
+                            <Text
+                                style={{
+                                    fontSize: 18,
+                                    fontWeight: '500',
+                                }}
+                                onPress={() =>
+                                    router.navigate('/calendar')
+                                }
+                            >
+                                {new Date(date).toLocaleDateString(
+                                    undefined,
+                                    {
+                                        weekday: 'long',
+                                        month: 'long',
+                                        day: 'numeric',
+                                    }
+                                )}
+                            </Text>
                         </View>
 
                         {/* Links */}
@@ -104,6 +209,7 @@ const App = () => {
                         style={{
                             flexDirection: 'row',
                             marginTop: 40,
+                            display: 'none',
                         }}
                     >
                         <View
@@ -140,7 +246,9 @@ const App = () => {
                         </View>
                     </View>
 
-                    <SimpleDayNavigator />
+                    <View style={{ display: 'none' }}>
+                        <SimpleDayNavigator />
+                    </View>
 
                     {/* Optioanl weight marked complete component */}
                     <View>
@@ -157,19 +265,62 @@ const App = () => {
                         ) : (
                             entries.map((entry) => (
                                 <View
+                                    style={{ marginBottom: 10 }}
                                     key={entry.id}
-                                    style={{
-                                        backgroundColor: 'lightgray',
-                                        padding: 10,
-                                        marginBottom: 10,
-                                    }}
                                 >
-                                    <Text>{entry.name}</Text>
-                                    <Text>
-                                        {new Date(
-                                            entry.created_at * 1000
-                                        ).toLocaleTimeString()}
-                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() =>
+                                            router.navigate(
+                                                `/editfood?foodItem=${JSON.stringify(entry)}`
+                                            )
+                                        }
+                                    >
+                                        <ReanimatedSwipeable
+                                            renderRightActions={() =>
+                                                RightAction(() =>
+                                                    handleDelete(
+                                                        entry.id
+                                                    )
+                                                )
+                                            }
+                                        >
+                                            <View
+                                                style={{
+                                                    backgroundColor:
+                                                        'lightgray',
+                                                    padding: 10,
+                                                }}
+                                            >
+                                                <Text>
+                                                    {entry.name}
+                                                </Text>
+                                                <Text>
+                                                    {entry.created_at}{' '}
+                                                    {
+                                                        entry.consumed_at
+                                                    }
+                                                </Text>
+                                                {entry.photo_uri && (
+                                                    <Image
+                                                        source={{
+                                                            uri: entry.photo_uri,
+                                                        }}
+                                                        style={{
+                                                            width: 100,
+                                                            height: 100,
+                                                        }}
+                                                        contentFit="cover" // like object-fit: cover
+                                                        transition={
+                                                            200
+                                                        } // fade in ms
+                                                        placeholder={
+                                                            blurhash
+                                                        } // show while loading
+                                                    />
+                                                )}
+                                            </View>
+                                        </ReanimatedSwipeable>
+                                    </TouchableOpacity>
                                 </View>
                             ))
                         )}
@@ -200,7 +351,9 @@ const App = () => {
                     }}
                 >
                     <Pressable
-                        onPress={() => router.navigate('/progress')}
+                        onPress={() =>
+                            router.navigate('/measurements')
+                        }
                         style={{
                             backgroundColor: 'blue',
                             padding: 10,
