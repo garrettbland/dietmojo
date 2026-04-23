@@ -15,9 +15,7 @@ const Settings = () => {
     const db = useSQLiteContext()
     const [recordCount, setRecordCount] = useState(0)
     const [dbVersion, setDbVersion] = useState(0)
-    const [tableName, setTableName] = useState(
-        TABLE_NAMES.FOOD_ENTRIES
-    )
+    const [tableName, setTableName] = useState(TABLE_NAMES.ENTRIES)
 
     useEffect(() => {
         loadInfo()
@@ -44,7 +42,7 @@ const Settings = () => {
                     style: 'destructive',
                     onPress: async () => {
                         await db.execAsync(
-                            `DELETE FROM ${TABLE_NAMES.FOOD_ENTRIES}`
+                            `DELETE FROM ${TABLE_NAMES.ENTRIES}`
                         )
                         await loadInfo()
                         Alert.alert('Success', 'All records deleted')
@@ -95,7 +93,7 @@ const Settings = () => {
     const devAddFoodEntry = async () => {
         try {
             await db.execAsync(`
-        INSERT INTO $ (name, calories, protein, carbs, fat, date)
+        INSERT INTO ${TABLE_NAMES.ENTRIES} (name, calories, protein, carbs, fat, date)
         VALUES ('Test Food', 100, 5, 10, 2, date('now'));
       `)
 
