@@ -61,6 +61,11 @@ export default function AddFood() {
     }, [tempPhotoUri])
 
     const handleAddFood = async () => {
+        if (!foodName) {
+            Alert.alert('Validation', 'Please enter a food name.')
+            return
+        }
+
         const { message } = await addEntry({
             name: foodName,
             photo_uri: previewUri ?? null,
@@ -311,7 +316,13 @@ export default function AddFood() {
                     </View>
 
                     {/* Date info */}
-                    <Text>Logging for date/date/date</Text>
+                    <Pressable
+                        onPress={() => router.navigate('/calendar')}
+                    >
+                        <Text>
+                            Consumed food on {date.toDateString()}
+                        </Text>
+                    </Pressable>
                 </SafeAreaView>
             </ScrollView>
         </>

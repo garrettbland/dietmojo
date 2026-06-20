@@ -1,3 +1,4 @@
+import { FoodCard } from '@/components/FoodCard'
 import { SimpleDayNavigator } from '@/components/SimpleDayNavigator'
 import { IconSymbol } from '@/components/ui/icon-symbol'
 import { deleteFoodItem } from '@/lib/deleteEntry'
@@ -5,7 +6,6 @@ import { getEntriesByDate } from '@/lib/getEntries'
 import { useDate } from '@/providers/DateProvider'
 import { FoodEntry } from '@/types/types'
 import Ionicons from '@expo/vector-icons/Ionicons'
-import { Image } from 'expo-image'
 import {
     useLocalSearchParams,
     usePathname,
@@ -20,7 +20,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import {
     SafeAreaView,
     useSafeAreaInsets,
@@ -264,64 +263,13 @@ const App = () => {
                             <Text>No meals logged for today</Text>
                         ) : (
                             entries.map((entry) => (
-                                <View
-                                    style={{ marginBottom: 10 }}
+                                <FoodCard
                                     key={entry.id}
-                                >
-                                    <TouchableOpacity
-                                        onPress={() =>
-                                            router.navigate(
-                                                `/editfood?foodItem=${JSON.stringify(entry)}`
-                                            )
-                                        }
-                                    >
-                                        <ReanimatedSwipeable
-                                            renderRightActions={() =>
-                                                RightAction(() =>
-                                                    handleDelete(
-                                                        entry.id
-                                                    )
-                                                )
-                                            }
-                                        >
-                                            <View
-                                                style={{
-                                                    backgroundColor:
-                                                        'lightgray',
-                                                    padding: 10,
-                                                }}
-                                            >
-                                                <Text>
-                                                    {entry.name}
-                                                </Text>
-                                                <Text>
-                                                    {entry.created_at}{' '}
-                                                    {
-                                                        entry.consumed_at
-                                                    }
-                                                </Text>
-                                                {entry.photo_uri && (
-                                                    <Image
-                                                        source={{
-                                                            uri: entry.photo_uri,
-                                                        }}
-                                                        style={{
-                                                            width: 100,
-                                                            height: 100,
-                                                        }}
-                                                        contentFit="cover" // like object-fit: cover
-                                                        transition={
-                                                            200
-                                                        } // fade in ms
-                                                        placeholder={
-                                                            blurhash
-                                                        } // show while loading
-                                                    />
-                                                )}
-                                            </View>
-                                        </ReanimatedSwipeable>
-                                    </TouchableOpacity>
-                                </View>
+                                    entry={entry}
+                                    onDelete={() =>
+                                        handleDelete(entry.id)
+                                    }
+                                />
                             ))
                         )}
                     </View>

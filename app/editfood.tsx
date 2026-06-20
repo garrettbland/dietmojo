@@ -294,7 +294,14 @@ export default function EditFood() {
                     </View>
 
                     {/* Date info */}
-                    <Text>Logging for date/date/date</Text>
+
+                    <Pressable
+                        onPress={() => router.navigate('/calendar')}
+                    >
+                        <Text>
+                            Consumed food on {date.toDateString()}
+                        </Text>
+                    </Pressable>
                 </SafeAreaView>
             </ScrollView>
         </>
