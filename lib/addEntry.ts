@@ -15,7 +15,7 @@ export const addEntry = async ({
     carbs,
     fat,
     category,
-}: Omit<FoodEntry, 'id'>): Promise<{
+}: Omit<FoodEntry, 'id' | 'created_at' | 'updated_at'>): Promise<{
     message: 'SUCCESS' | 'FAILED'
     error?: string
 }> => {

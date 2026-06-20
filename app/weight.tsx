@@ -30,7 +30,13 @@ const Weight = () => {
             type: 'WEIGHT',
             value: number,
         }).then(() => {
-            router.dismiss()
+            router.dismissTo({
+                pathname: '/measurements',
+                params: {
+                    status: 'SUCCESSFULLY_ADDED_MEASUREMENT',
+                    message: `Successfully added weight entry`, // to do: make this message more informative and user friendly
+                },
+            })
         })
     }
 
