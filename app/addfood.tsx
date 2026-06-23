@@ -1,10 +1,11 @@
 // import { Link } from "expo-router";
+import { FoodInputs } from '@/components/FoodInputs'
+import { ImageSelector } from '@/components/ImageSelector'
 import { IconSymbol } from '@/components/ui/icon-symbol'
 import { addEntry } from '@/lib/addEntry'
 import { formatDateForSQL } from '@/lib/date'
 import { useDate } from '@/providers/DateProvider'
-import { Image } from 'expo-image'
-import * as ImagePicker from 'expo-image-picker'
+import { FoodInputsType } from '@/types/types'
 import {
     Stack,
     useLocalSearchParams,
@@ -12,14 +13,7 @@ import {
     useRouter,
 } from 'expo-router'
 import { useEffect, useLayoutEffect, useState } from 'react'
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    View,
-} from 'react-native'
+import { Alert, Pressable, ScrollView, Text } from 'react-native'
 import {
     SafeAreaView,
     useSafeAreaInsets,
@@ -42,11 +36,14 @@ export default function AddFood() {
     const { tempPhotoUri } = useLocalSearchParams()
     const [previewUri, setPreviewUri] = useState<string | null>(null)
     const navigation = useNavigation()
-    const [foodName, setFoodName] = useState('')
-    const [calories, setCalories] = useState('')
-    const [protein, setProtein] = useState('')
-    const [carbs, setCarbs] = useState('')
-    const [fat, setFat] = useState('')
+
+    const [foodInputs, setFoodInputs] = useState<FoodInputsType>({
+        foodName: '',
+        calories: '',
+        protein: '',
+        carbs: '',
+        fat: '',
+    })
 
     /**
      * Whenever tempPhotoUri changes (i.e. when we come back from the TakePhoto screen),
@@ -61,19 +58,19 @@ export default function AddFood() {
     }, [tempPhotoUri])
 
     const handleAddFood = async () => {
-        if (!foodName) {
+        if (!foodInputs.foodName) {
             Alert.alert('Validation', 'Please enter a food name.')
             return
         }
 
         const { message } = await addEntry({
-            name: foodName,
+            name: foodInputs.foodName,
             photo_uri: previewUri ?? null,
             consumed_at: formatDateForSQL(date), // use the date from DateProvider
-            calories: parseInt(calories) || 0,
-            protein: parseInt(protein) || 0,
-            carbs: parseInt(carbs) || 0,
-            fat: parseInt(fat) || 0,
+            calories: foodInputs.calories || 0,
+            protein: foodInputs.protein || 0,
+            carbs: foodInputs.carbs || 0,
+            fat: foodInputs.fat || 0,
             notes: null, // to do
             category: null, // to do
         })
@@ -84,7 +81,7 @@ export default function AddFood() {
                 pathname: '/',
                 params: {
                     status: 'SUCCESSFULLY_ADDED_FOOD',
-                    message: `Successfully added ${foodName}`, // to do: make this message more informative and user friendly
+                    message: `Successfully added ${foodInputs.foodName}`, // to do: make this message more informative and user friendly
                 },
             })
         } else {
@@ -123,28 +120,6 @@ export default function AddFood() {
         })
     }, [navigation])
 
-    /**
-     * Grabbed this from the expo docs. Does it even work?
-     * https://docs.expo.dev/versions/latest/sdk/image/#usage
-     */
-    const blurhash =
-        '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj['
-
-    const handleChooseImage = async () => {
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: false,
-            quality: 0,
-            allowsMultipleSelection: false,
-        })
-
-        if (!result.canceled) {
-            setPreviewUri(result.assets[0].uri)
-        } else {
-            alert('You did not select any image.')
-        }
-    }
-
     return (
         <>
             <Stack.Toolbar placement="right">
@@ -166,154 +141,16 @@ export default function AddFood() {
                 contentContainerStyle={{ marginTop: insets.top }}
             >
                 <SafeAreaView style={{ padding: 15 }}>
-                    {/* Take photo or choose photo component */}
-                    <View style={{ backgroundColor: 'orange' }}>
-                        <Text>Photo is optional</Text>
-                        <View
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'row',
-                            }}
-                        >
-                            <Pressable
-                                style={{
-                                    width: '50%',
-                                    height: 150,
-                                    backgroundColor: 'gray',
-                                }}
-                                onPress={() => {
-                                    router.navigate('/takephoto')
-                                }}
-                            >
-                                {!previewUri && (
-                                    <Text>Take Photo</Text>
-                                )}
-                                {previewUri && (
-                                    <Image
-                                        source={{ uri: previewUri }}
-                                        placeholder={{ blurhash }}
-                                        contentFit="cover"
-                                        transition={500}
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                        }}
-                                    />
-                                )}
-                            </Pressable>
-                            <Pressable
-                                onPress={handleChooseImage}
-                                style={{ width: '50%', height: 150 }}
-                            >
-                                <Text>Choose Photo</Text>
-                            </Pressable>
-                        </View>
-                    </View>
+                    <ImageSelector
+                        previewUri={previewUri}
+                        setPreviewUri={setPreviewUri}
+                    />
 
-                    {/* Food name */}
-                    <View style={{ backgroundColor: 'red' }}>
-                        <Text>Food name</Text>
-                        <TextInput
-                            style={{
-                                height: 40,
-                                borderColor: 'gray',
-                                borderWidth: 1,
-                            }}
-                            onChangeText={setFoodName}
-                            placeholder="What did you eat?"
-                            returnKeyType="done"
-                        />
-                    </View>
-
-                    {/* Optional macros inputs */}
-                    <View>
-                        <Text>Add Macros (Optional)</Text>
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                flexWrap: 'wrap',
-                            }}
-                        >
-                            <View
-                                style={{
-                                    width: '50%',
-                                    paddingRight: 5,
-                                }}
-                            >
-                                <Text>Calories</Text>
-                                <TextInput
-                                    style={{
-                                        height: 40,
-                                        borderColor: 'gray',
-                                        borderWidth: 1,
-                                    }}
-                                    onChangeText={setCalories}
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            {/* Protein */}
-                            <View
-                                style={{
-                                    width: '50%',
-                                    paddingLeft: 5,
-                                }}
-                            >
-                                <Text>Protein (grams)</Text>
-                                <TextInput
-                                    style={{
-                                        height: 40,
-                                        borderColor: 'gray',
-                                        borderWidth: 1,
-                                    }}
-                                    onChangeText={setProtein}
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            {/* Carbs */}
-                            <View
-                                style={{
-                                    width: '50%',
-                                    paddingRight: 5,
-                                }}
-                            >
-                                <Text>Carbs (grams)</Text>
-                                <TextInput
-                                    style={{
-                                        height: 40,
-                                        borderColor: 'gray',
-                                        borderWidth: 1,
-                                    }}
-                                    onChangeText={setCarbs}
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            {/* Fat */}
-                            <View
-                                style={{
-                                    width: '50%',
-                                    paddingRight: 5,
-                                }}
-                            >
-                                <Text>Fat (grams)</Text>
-                                <TextInput
-                                    style={{
-                                        height: 40,
-                                        borderColor: 'gray',
-                                        borderWidth: 1,
-                                    }}
-                                    onChangeText={setFat}
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-                        </View>
-                    </View>
+                    {/** Food Inputs */}
+                    <FoodInputs
+                        foodInputs={foodInputs}
+                        setFoodInputs={setFoodInputs}
+                    />
 
                     {/* Date info */}
                     <Pressable

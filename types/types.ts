@@ -7,10 +7,10 @@ export type FoodEntry = {
     photo_uri: string | null
     notes: string | null
     consumed_at: string // YYYY-MM-DD
-    calories: number | null
-    protein: number | null
-    carbs: number | null
-    fat: number | null
+    calories: number
+    protein: number
+    carbs: number
+    fat: number
     category: string | null
     created_at: string // YYYY-MM-DD
     updated_at: string // YYYY-MM-DD (automatically updated with sqlite trigger)
@@ -34,4 +34,15 @@ export type MeasurementEntry = {
  */
 export type Settings = {
     theme: 'light' | 'dark' | 'system'
+}
+
+/**
+ * Food Input Type
+ */
+export type FoodInputsType = {
+    foodName: string
+    calories: number
+    protein: number
+    carbs: number
+    fat: number
 }
