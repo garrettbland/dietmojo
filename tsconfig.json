@@ -3,9 +3,33 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./*"]
-    },
-    "allowUnreachableCode": true
+      "@/*": [
+        "./*"
+      ]
+    }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "(tabs)",
+    "components/game.tsx",
+    "components/original_index.tsx",
+    "components/haptic-tab.tsx",
+    "components/external-link.tsx",
+    "components/hello-wave.tsx",
+    "components/parallax-scroll-view.tsx",
+    "components/themed-text.tsx",
+    "components/themed-view.tsx",
+    "components/SimpleDayNavigator.tsx",
+    "components/ModalNavbar.tsx",
+    "components/ui/collapsible.tsx",
+    "components/ui/icon-symbol.tsx",
+    "components/ui/icon-symbol.ios.tsx",
+    "hooks"
+  ]
 }

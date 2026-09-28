@@ -1,194 +1,644 @@
-import { TABLE_NAMES } from '@/constants'
-import { useRouter } from 'expo-router'
-import { useSQLiteContext } from 'expo-sqlite'
-import { useEffect, useState } from 'react'
-import { Alert, Button, ScrollView, Text, View } from 'react-native'
+import { AppText } from '@/components/ui/AppText'
+import { Card } from '@/components/ui/Card'
+import { Segmented } from '@/components/ui/Chip'
+import { IconButton } from '@/components/ui/IconButton'
+import { SheetHeader } from '@/components/ui/SheetHeader'
+import { TextField } from '@/components/ui/TextField'
+import { Colors, Spacing } from '@/constants/theme'
+import { eraseAllData, exportData } from '@/lib/dataTools'
+import { countEntries } from '@/lib/entries'
+import { haptic } from '@/lib/haptics'
 import {
-    SafeAreaView,
-    useSafeAreaInsets,
-} from 'react-native-safe-area-context'
+    cancelReminders,
+    formatReminderTime,
+    requestReminderPermission,
+    scheduleReminders,
+} from '@/lib/notifications'
+import {
+    getSettings,
+    Nutrient,
+    NUTRIENTS,
+    Settings,
+    updateSettings,
+    useSettings,
+} from '@/lib/settings'
+import { parseNumber, sanitizeDecimal } from '@/lib/units'
+import Ionicons from '@expo/vector-icons/Ionicons'
+import Constants from 'expo-constants'
+import { useRouter } from 'expo-router'
+import { ComponentProps, ReactNode, useEffect, useState } from 'react'
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Linking,
+    Platform,
+    Pressable,
+    ScrollView,
+    Switch,
+    View,
+} from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-const Settings = () => {
+const Section = ({
+    title,
+    footer,
+    children,
+}: {
+    title: string
+    footer?: string
+    children: ReactNode
+}) => (
+    <View style={{ gap: 8 }}>
+        <AppText
+            variant="label"
+            color={Colors.gray500}
+            style={{ marginLeft: 4 }}
+        >
+            {title.toUpperCase()}
+        </AppText>
+        <Card padding={0}>{children}</Card>
+        {footer && (
+            <AppText
+                variant="caption"
+                color={Colors.gray500}
+                style={{ marginHorizontal: 4 }}
+            >
+                {footer}
+            </AppText>
+        )}
+    </View>
+)
+
+const Row = ({
+    icon,
+    iconColor = Colors.orange,
+    label,
+    detail,
+    right,
+    onPress,
+    destructive,
+    first,
+    busy,
+}: {
+    icon: ComponentProps<typeof Ionicons>['name']
+    iconColor?: string
+    label: string
+    detail?: string
+    right?: ReactNode
+    onPress?: () => void
+    destructive?: boolean
+    first?: boolean
+    busy?: boolean
+}) => (
+    <Pressable
+        disabled={!onPress || busy}
+        onPress={onPress}
+        accessibilityRole={onPress ? 'button' : undefined}
+        style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingHorizontal: 16,
+            minHeight: 56,
+            paddingVertical: 10,
+            borderTopWidth: first ? 0 : 1,
+            borderTopColor: Colors.border,
+            backgroundColor: pressed ? Colors.gray50 : 'transparent',
+        })}
+    >
+        <View
+            style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                backgroundColor: destructive
+                    ? '#FDECEC'
+                    : Colors.orangeTint,
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            <Ionicons
+                name={icon}
+                size={18}
+                color={destructive ? Colors.danger : iconColor}
+            />
+        </View>
+        <View style={{ flex: 1 }}>
+            <AppText
+                variant="bodyStrong"
+                color={destructive ? Colors.danger : Colors.text}
+            >
+                {label}
+            </AppText>
+            {detail && (
+                <AppText variant="caption" color={Colors.gray500}>
+                    {detail}
+                </AppText>
+            )}
+        </View>
+        {busy ? (
+            <ActivityIndicator color={Colors.coral} />
+        ) : (
+            (right ??
+            (onPress && (
+                <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={Colors.gray300}
+                />
+            )))
+        )}
+    </Pressable>
+)
+
+const shiftTime = (time: string, minutes: number) => {
+    const [h, m] = time.split(':').map(Number)
+    const total = (((h * 60 + m + minutes) % 1440) + 1440) % 1440
+    const hh = String(Math.floor(total / 60)).padStart(2, '0')
+    const mm = String(total % 60).padStart(2, '0')
+    return `${hh}:${mm}`
+}
+
+const SettingsScreen = () => {
     const router = useRouter()
     const insets = useSafeAreaInsets()
-
-    const db = useSQLiteContext()
-    const [recordCount, setRecordCount] = useState(0)
-    const [dbVersion, setDbVersion] = useState(0)
-    const [tableName, setTableName] = useState(TABLE_NAMES.ENTRIES)
+    const settings = useSettings()
+    const [goalText, setGoalText] = useState(() =>
+        Object.fromEntries(
+            NUTRIENTS.map((n) => [
+                n.key,
+                String(settings.goals[n.key]),
+            ])
+        )
+    )
+    const shownNutrients = NUTRIENTS.filter(
+        (n) => settings.show[n.key]
+    )
+    const [count, setCount] = useState<number | null>(null)
+    const [exporting, setExporting] = useState(false)
 
     useEffect(() => {
-        loadInfo()
+        countEntries().then(setCount)
     }, [])
 
-    const loadInfo = async () => {
-        const version = await db.getFirstAsync('PRAGMA user_version')
-        setDbVersion(version.user_version)
-
-        const count = await db.getFirstAsync(
-            `SELECT COUNT(*) as count FROM ${tableName}`
-        )
-        setRecordCount(count.count)
+    const commitGoal = (key: Nutrient) => {
+        const n = parseNumber(goalText[key] ?? '')
+        if (n == null || n <= 0) {
+            setGoalText((p) => ({
+                ...p,
+                [key]: String(settings.goals[key]),
+            }))
+            return
+        }
+        updateSettings((prev) => ({
+            goals: { ...prev.goals, [key]: Math.round(n) },
+        }))
     }
 
-    const clearAllData = async () => {
-        Alert.alert(
-            'Clear All Data',
-            `Delete all ${recordCount} records? Tables and schema remain.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Clear',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await db.execAsync(
-                            `DELETE FROM ${TABLE_NAMES.ENTRIES}`
-                        )
-                        await loadInfo()
-                        Alert.alert('Success', 'All records deleted')
+    const setReminders = async (
+        patch: Partial<Settings['reminders']>
+    ) => {
+        // Read the latest value so quick repeated taps don't clobber
+        const next = { ...getSettings().reminders, ...patch }
+        updateSettings({ reminders: next })
+
+        if (!next.enabled) {
+            await cancelReminders()
+            return
+        }
+        const granted = await requestReminderPermission()
+        if (!granted) {
+            updateSettings({ reminders: { ...next, enabled: false } })
+            Alert.alert(
+                'Notifications are off',
+                'Turn on notifications for Diet Mojo in Settings to get reminders.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Open Settings',
+                        onPress: () => Linking.openSettings(),
                     },
-                },
-            ]
-        )
+                ]
+            )
+            return
+        }
+        await scheduleReminders(getSettings().reminders.times)
     }
 
-    const resetDatabase = async () => {
-        Alert.alert(
-            'Reset Database',
-            'Drop all tables and reset migrations? Requires app restart.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Reset',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const tables = await db.getAllAsync(
-                                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                            )
-
-                            for (const table of tables) {
-                                await db.execAsync(
-                                    `DROP TABLE IF EXISTS ${table.name}`
-                                )
-                            }
-
-                            await db.execAsync(
-                                'PRAGMA user_version = 0'
-                            )
-
-                            Alert.alert(
-                                'Success',
-                                'Database reset. Please restart the app.'
-                            )
-                        } catch (error) {
-                            Alert.alert('Error', error.message)
-                        }
-                    },
-                },
-            ]
-        )
-    }
-
-    const devAddFoodEntry = async () => {
+    const doExport = async () => {
+        setExporting(true)
         try {
-            await db.execAsync(`
-        INSERT INTO ${TABLE_NAMES.ENTRIES} (name, calories, protein, carbs, fat, date)
-        VALUES ('Test Food', 100, 5, 10, 2, date('now'));
-      `)
-
-            // Refresh stats after adding entry
-            loadInfo()
+            await exportData()
         } catch (error) {
-            console.error('Error adding food entry:', error)
+            Alert.alert(
+                'Export failed',
+                error instanceof Error
+                    ? error.message
+                    : 'Please try again.'
+            )
+        } finally {
+            setExporting(false)
         }
     }
 
+    const confirmErase = () => {
+        Alert.alert(
+            'Erase all data?',
+            'This permanently deletes every meal, photo and weigh-in on this phone. This cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Erase everything',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await eraseAllData()
+                        haptic.success()
+                        setCount(0)
+                        Alert.alert('Done', 'All data was erased.')
+                    },
+                },
+            ]
+        )
+    }
+
+    const version = Constants.expoConfig?.version ?? '1.0.0'
+
     return (
-        <ScrollView
-            contentInsetAdjustmentBehavior="automatic"
-            contentContainerStyle={{ flexGrow: 1 }}
+        <KeyboardAvoidingView
+            style={{ flex: 1, backgroundColor: Colors.background }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <SafeAreaView
-                style={{
-                    flex: 1,
-                    padding: 15,
+            <SheetHeader title="Settings" />
+            <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{
+                    padding: Spacing.lg,
+                    paddingTop: Spacing.xs,
+                    gap: Spacing.xl,
+                    paddingBottom: insets.bottom + 40,
                 }}
             >
-                <View>
-                    <Text
-                        style={{
-                            fontSize: 18,
-                            fontWeight: '500',
-                        }}
-                    >
-                        Settings
-                    </Text>
-                </View>
-                <View
-                    style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                    }}
+                <Section
+                    title="Track on home"
+                    footer={
+                        settings.trackNutrition
+                            ? 'Pick what the home screen shows progress for. Every nutrient can still be logged on a meal — this only changes what is displayed.'
+                            : 'Nutrition is off: no nutrition fields on the meal form and no nutrient progress on home. Your picks are remembered for when you turn it back on.'
+                    }
                 >
-                    <View>
-                        <Text>
-                            Dexterity for add meal and buttons on
-                            right or left
-                        </Text>
-                        <Text>Notifications for reminders</Text>
-                        <Text>
-                            Food list view. (Like larger items vs more
-                            compact)
-                        </Text>
-                        <Text>Custom macros</Text>
-                        <Text>Light or dark mode</Text>
-                        <Text>Export data</Text>
-                        <Text>Import data?</Text>
-                        <Text>Apple health integration</Text>
-                        <Text>Erase all data (images and data)</Text>
-                    </View>
-                </View>
-                <View
-                    style={{
-                        borderWidth: 1,
-                        borderColor: 'lightgray',
-                        padding: 10,
-                        marginTop: 50,
-                    }}
-                >
-                    <Text
-                        style={{
-                            fontWeight: 'bold',
-                            fontSize: 20,
-                            marginBottom: 5,
-                        }}
-                    >
-                        Dev Stuff
-                    </Text>
-
-                    <Text>Table Name: {tableName}</Text>
-                    <Text>Table Version: {dbVersion}</Text>
-                    <Text>Number of entries: {recordCount}</Text>
-                    <Text
-                        style={{
-                            fontWeight: 'bold',
-                            fontSize: 20,
-                            marginTop: 5,
-                            marginBottom: 5,
-                        }}
-                    >
-                        Actions
-                    </Text>
-                    <Button
-                        title="Explore Database"
-                        onPress={() => router.push('/database')}
+                    <Row
+                        first
+                        icon="nutrition-outline"
+                        label="Track nutrition"
+                        detail={
+                            settings.trackNutrition
+                                ? 'Calories and macros on meals and home'
+                                : 'Photos, names and notes only'
+                        }
+                        right={
+                            <Switch
+                                value={settings.trackNutrition}
+                                onValueChange={(trackNutrition) =>
+                                    updateSettings({ trackNutrition })
+                                }
+                                trackColor={{
+                                    true: Colors.coral,
+                                    false: Colors.gray100,
+                                }}
+                                accessibilityLabel="Track nutrition"
+                            />
+                        }
                     />
-                </View>
-            </SafeAreaView>
-        </ScrollView>
+                    {settings.trackNutrition &&
+                        NUTRIENTS.map((n) => (
+                            <Row
+                                key={n.key}
+                                icon="stats-chart-outline"
+                                label={n.label}
+                                detail={
+                                    settings.show[n.key]
+                                        ? `Goal ${settings.goals[n.key]}${n.suffix === 'g' ? 'g' : ' kcal'}`
+                                        : 'Hidden on home'
+                                }
+                                right={
+                                    <Switch
+                                        value={settings.show[n.key]}
+                                        onValueChange={(on) =>
+                                            updateSettings(
+                                                (prev) => ({
+                                                    show: {
+                                                        ...prev.show,
+                                                        [n.key]: on,
+                                                    },
+                                                })
+                                            )
+                                        }
+                                        trackColor={{
+                                            true: Colors.coral,
+                                            false: Colors.gray100,
+                                        }}
+                                        accessibilityLabel={`Show ${n.label} on home`}
+                                    />
+                                }
+                            />
+                        ))}
+                    {(
+                        [
+                            {
+                                key: 'streak',
+                                label: 'Streak',
+                                icon: 'flame-outline',
+                                detail: 'Days logged in a row',
+                            },
+                            {
+                                key: 'weight',
+                                label: 'Weight',
+                                icon: 'scale-outline',
+                                detail: 'Latest weigh-in for the day',
+                            },
+                        ] as const
+                    ).map((c) => (
+                        <Row
+                            key={c.key}
+                            icon={c.icon}
+                            label={c.label}
+                            detail={
+                                settings.cards[c.key]
+                                    ? c.detail
+                                    : 'Hidden on home'
+                            }
+                            right={
+                                <Switch
+                                    value={settings.cards[c.key]}
+                                    onValueChange={(on) =>
+                                        updateSettings((prev) => ({
+                                            cards: {
+                                                ...prev.cards,
+                                                [c.key]: on,
+                                            },
+                                        }))
+                                    }
+                                    trackColor={{
+                                        true: Colors.coral,
+                                        false: Colors.gray100,
+                                    }}
+                                    accessibilityLabel={`Show ${c.label} on home`}
+                                />
+                            }
+                        />
+                    ))}
+                </Section>
+
+                {settings.trackNutrition &&
+                    shownNutrients.length > 0 && (
+                        <Section
+                            title="Daily goals"
+                            footer="Targets for the nutrients shown above."
+                        >
+                            <View
+                                style={{
+                                    padding: 16,
+                                    flexDirection: 'row',
+                                    flexWrap: 'wrap',
+                                    gap: Spacing.sm,
+                                }}
+                            >
+                                {shownNutrients.map((n) => (
+                                    <View
+                                        key={n.key}
+                                        style={{
+                                            width: '47%',
+                                            flexGrow: 1,
+                                        }}
+                                    >
+                                        <TextField
+                                            label={n.label}
+                                            suffix={n.suffix}
+                                            keyboardType="number-pad"
+                                            value={goalText[n.key]}
+                                            onChangeText={(t) =>
+                                                setGoalText((p) => ({
+                                                    ...p,
+                                                    [n.key]:
+                                                        sanitizeDecimal(
+                                                            t
+                                                        ),
+                                                }))
+                                            }
+                                            onBlur={() =>
+                                                commitGoal(n.key)
+                                            }
+                                            selectTextOnFocus
+                                            maxLength={5}
+                                        />
+                                    </View>
+                                ))}
+                            </View>
+                        </Section>
+                    )}
+
+                <Section title="Preferences">
+                    <View style={{ padding: 16, gap: 14 }}>
+                        <View style={{ gap: 8 }}>
+                            <AppText
+                                variant="label"
+                                color={Colors.gray700}
+                            >
+                                Weight unit
+                            </AppText>
+                            <Segmented
+                                options={[
+                                    {
+                                        key: 'lb',
+                                        label: 'Pounds (lb)',
+                                    },
+                                    {
+                                        key: 'kg',
+                                        label: 'Kilograms (kg)',
+                                    },
+                                ]}
+                                value={settings.weightUnit}
+                                onChange={(weightUnit) =>
+                                    updateSettings({ weightUnit })
+                                }
+                            />
+                        </View>
+                        <View style={{ gap: 8 }}>
+                            <AppText
+                                variant="label"
+                                color={Colors.gray700}
+                            >
+                                Meal list
+                            </AppText>
+                            <Segmented
+                                options={[
+                                    {
+                                        key: 'comfortable',
+                                        label: 'Comfortable',
+                                    },
+                                    {
+                                        key: 'compact',
+                                        label: 'Compact',
+                                    },
+                                ]}
+                                value={settings.listStyle}
+                                onChange={(listStyle) =>
+                                    updateSettings({ listStyle })
+                                }
+                            />
+                        </View>
+                        <View style={{ gap: 8 }}>
+                            <AppText
+                                variant="label"
+                                color={Colors.gray700}
+                            >
+                                Add meal button
+                            </AppText>
+                            <Segmented
+                                options={[
+                                    {
+                                        key: 'left',
+                                        label: 'Left hand',
+                                    },
+                                    {
+                                        key: 'right',
+                                        label: 'Right hand',
+                                    },
+                                ]}
+                                value={settings.handedness}
+                                onChange={(handedness) =>
+                                    updateSettings({ handedness })
+                                }
+                            />
+                        </View>
+                    </View>
+                </Section>
+
+                <Section
+                    title="Reminders"
+                    footer="Daily nudges to log your meals."
+                >
+                    <Row
+                        first
+                        icon="notifications"
+                        label="Meal reminders"
+                        right={
+                            <Switch
+                                value={settings.reminders.enabled}
+                                onValueChange={(enabled) =>
+                                    setReminders({ enabled })
+                                }
+                                trackColor={{
+                                    true: Colors.coral,
+                                    false: Colors.gray100,
+                                }}
+                                accessibilityLabel="Meal reminders"
+                            />
+                        }
+                    />
+                    {settings.reminders.enabled &&
+                        settings.reminders.times.map((time, i) => (
+                            <Row
+                                key={i}
+                                icon="time-outline"
+                                label={formatReminderTime(time)}
+                                detail={
+                                    ['Breakfast', 'Lunch', 'Dinner'][
+                                        i
+                                    ] ?? 'Reminder'
+                                }
+                                right={
+                                    <View
+                                        style={{
+                                            flexDirection: 'row',
+                                            gap: 6,
+                                        }}
+                                    >
+                                        {[-30, 30].map((delta) => (
+                                            <IconButton
+                                                key={delta}
+                                                icon={
+                                                    delta < 0
+                                                        ? 'remove'
+                                                        : 'add'
+                                                }
+                                                accessibilityLabel={`${delta < 0 ? 'Earlier' : 'Later'} by 30 minutes`}
+                                                size={34}
+                                                background={
+                                                    Colors.gray50
+                                                }
+                                                onPress={() => {
+                                                    const times = [
+                                                        ...getSettings()
+                                                            .reminders
+                                                            .times,
+                                                    ]
+                                                    times[i] =
+                                                        shiftTime(
+                                                            times[i],
+                                                            delta
+                                                        )
+                                                    setReminders({
+                                                        times,
+                                                    })
+                                                }}
+                                            />
+                                        ))}
+                                    </View>
+                                }
+                            />
+                        ))}
+                </Section>
+
+                <Section
+                    title="Your data"
+                    footer="Everything is stored only on this phone."
+                >
+                    <Row
+                        first
+                        icon="share-outline"
+                        label="Export data"
+                        detail={
+                            count == null
+                                ? 'CSV of meals and weigh-ins'
+                                : `${count} meals · CSV`
+                        }
+                        onPress={doExport}
+                        busy={exporting}
+                    />
+                    <Row
+                        icon="trash-outline"
+                        label="Erase all data"
+                        detail="Meals, photos and weigh-ins"
+                        destructive
+                        onPress={confirmErase}
+                    />
+                </Section>
+
+                {__DEV__ && (
+                    <Section title="Developer">
+                        <Row
+                            first
+                            icon="server-outline"
+                            label="Explore database"
+                            onPress={() => router.push('/database')}
+                        />
+                    </Section>
+                )}
+
+                <AppText
+                    variant="caption"
+                    color={Colors.gray500}
+                    align="center"
+                >
+                    Diet Mojo {version}
+                    {'\n'}Your food, your mood, your mojo.
+                </AppText>
+            </ScrollView>
+        </KeyboardAvoidingView>
     )
 }
 
-export default Settings
+export default SettingsScreen

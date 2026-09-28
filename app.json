@@ -1,23 +1,28 @@
 {
   "expo": {
-    "name": "dietmojo",
+    "name": "Diet Mojo",
     "slug": "dietmojo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "dietmojo",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.garrettbland.dietmojo",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FF8C38",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.garrettbland.dietmojo"
     },
     "web": {
       "output": "static",
@@ -31,20 +36,41 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#FFF8F4"
         }
       ],
       "expo-sqlite",
       "expo-font",
       "expo-image",
-      "expo-web-browser"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Diet Mojo uses your camera to take photos of your meals.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Diet Mojo needs access to your photos so you can add meal pictures.",
+          "cameraPermission": "Diet Mojo uses your camera to take photos of your meals.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF6169"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "backgroundColor": "#FFF8F4",
+    "description": "Track what you eat with photos. Snap a picture of each meal, log macros if you want to, and see your day at a glance.",
+    "primaryColor": "#FF6169"
   }
 }

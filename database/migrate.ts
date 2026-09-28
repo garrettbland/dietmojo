@@ -5,6 +5,8 @@ export const migrateDbIfNeeded = async (db: SQLiteDatabase) => {
     // Increment this for each migration
     const TOTAL_MIGRATIONS = migrations.length
 
+    await db.execAsync('PRAGMA journal_mode = WAL')
+
     console.log(
         `ℹ️ Latest required migration version: ${TOTAL_MIGRATIONS}`
     )
@@ -12,8 +14,10 @@ export const migrateDbIfNeeded = async (db: SQLiteDatabase) => {
     /**
      * Have to use user_version to track the users current migration version.
      */
-    let { user_version: USERS_CURRENT_MIGRATION } =
-        await db.getFirstAsync('PRAGMA user_version')
+    const row = await db.getFirstAsync<{ user_version: number }>(
+        'PRAGMA user_version'
+    )
+    const USERS_CURRENT_MIGRATION = row?.user_version ?? 0
 
     console.log(
         `📊 Current database migration version: ${USERS_CURRENT_MIGRATION}/${TOTAL_MIGRATIONS}`
@@ -45,7 +49,7 @@ export const migrateDbIfNeeded = async (db: SQLiteDatabase) => {
             await db.execAsync('ROLLBACK')
             console.error(`  ❌ ${migration.name} failed:`, error)
             throw new Error(
-                `Migration ${i} (${migration.name}) failed: ${error.message}`
+                `Migration ${i} (${migration.name}) failed: ${error instanceof Error ? error.message : String(error)}`
             )
         }
     }

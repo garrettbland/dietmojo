@@ -139,7 +139,7 @@ const Database = () => {
                 console.log(`date of mocked foo`, date)
                 const dateString = date.toISOString().split('T')[0]
                 await db.execAsync(`
-          INSERT INTO ${TABLE_NAMES.FOOD_ENTRIES} (name, calories, protein, carbs, fat, consumed_at)
+          INSERT INTO ${TABLE_NAMES.ENTRIES} (name, calories, protein, carbs, fat, consumed_at)
           VALUES ('${food.name}', ${food.calories}, ${food.protein}, ${food.carbs}, ${food.fat}, ${dateString});
         `)
             }

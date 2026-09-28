@@ -1,347 +1,531 @@
+import { DailySummary } from '@/components/DailySummary'
 import { FoodCard } from '@/components/FoodCard'
-import { SimpleDayNavigator } from '@/components/SimpleDayNavigator'
-import { IconSymbol } from '@/components/ui/icon-symbol'
-import { deleteFoodItem } from '@/lib/deleteEntry'
-import { getEntriesByDate } from '@/lib/getEntries'
+import { AppText } from '@/components/ui/AppText'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { IconButton } from '@/components/ui/IconButton'
+import { Toast } from '@/components/ui/Toast'
+import { WeekStrip } from '@/components/WeekStrip'
+import { Colors, Spacing } from '@/constants/theme'
+import {
+    addDays,
+    formatDayShort,
+    formatLongDate,
+    isToday,
+} from '@/lib/date'
+import {
+    deleteEntry,
+    getEntriesByDate,
+    getLoggedDays,
+    getStreak,
+    restoreEntry,
+} from '@/lib/entries'
+import { haptic } from '@/lib/haptics'
+import { getMeasurementForDay } from '@/lib/measurements'
+import { deletePhoto } from '@/lib/photos'
+import { useSettings } from '@/lib/settings'
+import { formatWeight } from '@/lib/units'
 import { useDate } from '@/providers/DateProvider'
-import { FoodEntry } from '@/types/types'
+import { FoodEntry, MeasurementEntry } from '@/types/types'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-    useLocalSearchParams,
-    usePathname,
-    useRouter,
-} from 'expo-router'
-import { useEffect, useState } from 'react'
-import {
-    Alert,
+    ActivityIndicator,
     Pressable,
+    RefreshControl,
     ScrollView,
     Text,
-    TouchableOpacity,
     View,
 } from 'react-native'
-import {
-    SafeAreaView,
-    useSafeAreaInsets,
-} from 'react-native-safe-area-context'
+import Animated, {
+    FadeIn,
+    LinearTransition,
+} from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-const RightAction = (onDelete: () => void) => (
-    <TouchableOpacity
-        onPress={onDelete}
-        style={{
-            backgroundColor: 'red',
-            justifyContent: 'center',
-            padding: 20,
-        }}
-    >
-        <Text style={{ color: 'white' }}>Delete</Text>
-    </TouchableOpacity>
-)
+const UNDO_MS = 4000
 
-/**
- * Grabbed this from the expo docs. Does it even work?
- * https://docs.expo.dev/versions/latest/sdk/image/#usage
- */
-const blurhash =
-    '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj['
-
-const App = () => {
+const Home = () => {
     const router = useRouter()
-    const pathname = usePathname()
     const insets = useSafeAreaInsets()
+    const settings = useSettings()
     const { date, setDate } = useDate()
+
     const [entries, setEntries] = useState<FoodEntry[]>([])
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
+    const [streak, setStreak] = useState({
+        current: 0,
+        loggedToday: false,
+    })
+    const [weight, setWeight] = useState<MeasurementEntry | null>(
+        null
+    )
+    const [loggedDays, setLoggedDays] = useState<Set<string>>(
+        new Set()
+    )
+    const [undo, setUndo] = useState<FoodEntry | null>(null)
+    const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(
+        null
+    )
+    const requestId = useRef(0)
 
-    const { status, message } = useLocalSearchParams()
+    const load = useCallback(async () => {
+        const id = ++requestId.current
+        try {
+            const [dayEntries, s, w, days] = await Promise.all([
+                getEntriesByDate(date),
+                getStreak(),
+                getMeasurementForDay('WEIGHT', date),
+                // Wide enough that paging the strip back never runs
+                // out of dots before the data does
+                getLoggedDays(addDays(date, -120), addDays(date, 7)),
+            ])
+            // Ignore stale responses when flipping days quickly
+            if (id !== requestId.current) return
+            setEntries(dayEntries)
+            setStreak(s)
+            setWeight(w)
+            setLoggedDays(days)
+        } catch (error) {
+            console.error('Failed to load day', error)
+        } finally {
+            if (id === requestId.current) setLoading(false)
+        }
+    }, [date])
 
-    const loadEntries = async () => {
-        setLoading(true)
-        const data = await getEntriesByDate(date)
-        setEntries(data)
-        setLoading(false)
+    // Reload whenever the screen regains focus or the day changes
+    useFocusEffect(
+        useCallback(() => {
+            load()
+        }, [load])
+    )
+
+    // Finish any pending delete when leaving the screen
+    useEffect(
+        () => () => {
+            if (undoTimer.current) clearTimeout(undoTimer.current)
+        },
+        []
+    )
+
+    const onRefresh = async () => {
+        setRefreshing(true)
+        await load()
+        setRefreshing(false)
     }
 
-    // Fetch entries when date changes
-    useEffect(() => {
-        /**
-         * Only fetch entries if we're on the home screen.
-         * This prevents refetching when we navigate back from add food or other screens.
-         *  We still want to refetch when date changes or when screen is focused,
-         * but not on every navigation event.
-         */
-        // if (pathname !== '/') {
-        //     return
-        // }
+    const handleDelete = async (entry: FoodEntry) => {
+        haptic.warning()
+        // Flush previous pending delete
+        if (undo) deletePhoto(undo.photo_uri)
+        if (undoTimer.current) clearTimeout(undoTimer.current)
 
-        loadEntries()
-    }, [date]) // also refetch when screen is focused
-
-    useEffect(() => {
-        if (status === 'SUCCESSFULLY_ADDED_FOOD') {
-            loadEntries()
+        setEntries((prev) => prev.filter((e) => e.id !== entry.id))
+        const res = await deleteEntry(entry, { keepPhoto: true })
+        if (!res.ok) {
+            load()
+            return
         }
-
-        if (status === 'SUCCESSFULLY_UPDATED_FOOD') {
-            loadEntries()
-        }
-
-        router.setParams({ status: undefined })
-    }, [status])
-
-    const handleDelete = (id: number) => {
-        Alert.alert(
-            'Confirm Delete',
-            'Are you sure you want to delete this entry?',
-            [
-                {
-                    text: 'Cancel',
-                    style: 'cancel',
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        deleteFoodItem(id).then(({ message }) => {
-                            if (message === 'SUCCESS') {
-                                // Filter out deleted entry. No need to refetch entire list from db
-                                const filteredEntries =
-                                    entries.filter(
-                                        (entry) => entry.id !== id
-                                    )
-                                setEntries(filteredEntries)
-                            } else {
-                                Alert.alert(
-                                    'Error',
-                                    'Failed to delete entry. Please try again.'
-                                )
-                            }
-                        })
-                    },
-                },
-            ]
-        )
+        setUndo(entry)
+        undoTimer.current = setTimeout(() => {
+            deletePhoto(entry.photo_uri)
+            setUndo(null)
+            load()
+        }, UNDO_MS)
     }
+
+    const handleUndo = async () => {
+        if (!undo) return
+        if (undoTimer.current) clearTimeout(undoTimer.current)
+        await restoreEntry(undo)
+        setUndo(null)
+        haptic.success()
+        load()
+    }
+
+    const leftHanded = settings.handedness === 'left'
+    const viewingToday = isToday(date)
+    const bottomBarHeight = 64 + insets.bottom
 
     return (
-        <>
-            <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-                <SafeAreaView
-                    style={{
-                        flex: 1,
-                        padding: 15,
-                    }}
-                >
-                    {/* Navbar */}
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                        }}
-                    >
-                        {/* Title */}
-                        {/* <View>
-                            <Text
-                                style={{
-                                    fontSize: 30,
-                                    fontWeight: '500',
-                                }}
-                            >
-                                Diet Mojo
-                            </Text>
-                            <Text>Track your meals</Text>
-                        </View> */}
-
-                        {/** Date */}
-                        <View>
-                            <Text
-                                style={{
-                                    fontSize: 18,
-                                    fontWeight: '500',
-                                }}
-                                onPress={() =>
-                                    router.navigate('/calendar')
-                                }
-                            >
-                                {new Date(date).toLocaleDateString(
-                                    undefined,
-                                    {
-                                        weekday: 'long',
-                                        month: 'long',
-                                        day: 'numeric',
-                                    }
-                                )}
-                            </Text>
-                        </View>
-
-                        {/* Links */}
-                        <View
-                            style={{
-                                flexDirection: 'row',
-                                gap: 10,
-                                alignItems: 'center',
-                            }}
-                        >
-                            {/* <Pressable onPress={() => router.navigate("/progress")}>
-                <Ionicons name="scale" size={24} color="black" />
-              </Pressable> */}
-                            <Pressable
-                                onPress={() =>
-                                    router.navigate('/settings')
-                                }
-                            >
-                                <Ionicons
-                                    name="settings"
-                                    size={24}
-                                    color="black"
-                                />
-                            </Pressable>
-                            {/* <Pressable onPress={() => router.navigate("/calendar")}>
-                  <IconSymbol size={26} name="calendar" color={"black"} />
-                </Pressable> */}
-                        </View>
-                    </View>
-
-                    {/* Streaks */}
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            marginTop: 40,
-                            display: 'none',
-                        }}
-                    >
-                        <View
-                            style={{
-                                width: '50%',
-                                paddingRight: 5,
-                            }}
-                        >
-                            <View
-                                style={{
-                                    backgroundColor: 'lightgray',
-                                    padding: 10,
-                                }}
-                            >
-                                <Text>Current Streak</Text>
-                                <Text>🔥 5 Day Streak</Text>
-                            </View>
-                        </View>
-                        <View
-                            style={{
-                                width: '50%',
-                                paddingLeft: 5,
-                            }}
-                        >
-                            <View
-                                style={{
-                                    backgroundColor: 'teal',
-                                    padding: 10,
-                                }}
-                            >
-                                <Text>Current Streak</Text>
-                                <Text>🔥 5 Day Streak</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    <View style={{ display: 'none' }}>
-                        <SimpleDayNavigator />
-                    </View>
-
-                    {/* Optioanl weight marked complete component */}
-                    <View>
-                        <Text>Optional weight component</Text>
-                    </View>
-
-                    {/* Meals */}
-                    <View>
-                        <Text>Meals list</Text>
-                        {loading ? (
-                            <Text>Loading...</Text>
-                        ) : entries.length === 0 ? (
-                            <Text>No meals logged for today</Text>
-                        ) : (
-                            entries.map((entry) => (
-                                <FoodCard
-                                    key={entry.id}
-                                    entry={entry}
-                                    onDelete={() =>
-                                        handleDelete(entry.id)
-                                    }
-                                />
-                            ))
-                        )}
-                    </View>
-                </SafeAreaView>
-            </ScrollView>
-            {/* Add meal button */}
-            <View
-                style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0,
-                    width: '100%',
-                    marginBottom: insets.bottom + 10,
-                    height: 50,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexDirection: 'row',
-                    paddingHorizontal: 15,
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
+            <ScrollView
+                contentContainerStyle={{
+                    paddingTop: insets.top + Spacing.xs,
+                    paddingHorizontal: Spacing.md,
+                    paddingBottom: bottomBarHeight + 40,
+                    gap: Spacing.md,
                 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={Colors.coral}
+                    />
+                }
             >
+                {/* Header */}
                 <View
                     style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        gap: 10,
+                        justifyContent: 'space-between',
                     }}
                 >
                     <Pressable
-                        onPress={() =>
-                            router.navigate('/measurements')
-                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`${formatLongDate(date)}. Open calendar`}
+                        onPress={() => {
+                            haptic.light()
+                            router.push('/calendar')
+                        }}
+                        style={{ flex: 1, paddingVertical: 4 }}
+                    >
+                        {({ pressed }) => (
+                            <View
+                                style={{
+                                    // Content-sized so the press scales
+                                    // around the date, not the whole row
+                                    alignSelf: 'flex-start',
+                                    transform: [
+                                        { scale: pressed ? 0.97 : 1 },
+                                    ],
+                                }}
+                            >
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                    }}
+                                >
+                                    <AppText
+                                        variant="h1"
+                                        numberOfLines={1}
+                                    >
+                                        {formatDayShort(date)}
+                                    </AppText>
+                                    <Ionicons
+                                        name="chevron-down"
+                                        size={20}
+                                        color={Colors.coral}
+                                    />
+                                </View>
+                                <AppText
+                                    variant="caption"
+                                    color={Colors.gray500}
+                                >
+                                    {formatLongDate(date)}
+                                </AppText>
+                            </View>
+                        )}
+                    </Pressable>
+                    <View
                         style={{
-                            backgroundColor: 'blue',
-                            padding: 10,
-                            borderRadius: 50,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: Spacing.xs,
                         }}
                     >
-                        <Ionicons
-                            name="scale"
-                            size={24}
-                            color="black"
+                        <IconButton
+                            icon="share-outline"
+                            accessibilityLabel="Share this day"
+                            floating
+                            onPress={() => router.push('/share')}
                         />
-                    </Pressable>
-                    <Pressable
-                        onPress={() => router.navigate('/calendar')}
-                        style={{
-                            backgroundColor: 'blue',
-                            padding: 10,
-                            borderRadius: 50,
-                        }}
-                    >
-                        <IconSymbol
-                            size={26}
-                            name="calendar"
-                            color={'black'}
+                        <IconButton
+                            icon="settings-outline"
+                            accessibilityLabel="Settings"
+                            floating
+                            onPress={() => router.push('/settings')}
                         />
-                    </Pressable>
+                    </View>
                 </View>
-                <Pressable
-                    onPress={() => router.navigate('/addfood')}
+
+                {/* Week — the arrows inside page the window of days */}
+                <WeekStrip
+                    selected={date}
+                    onSelect={setDate}
+                    loggedDays={loggedDays}
+                />
+
+                {/* Summary */}
+                {settings.trackNutrition && (
+                    <DailySummary
+                        entries={entries}
+                        goals={settings.goals}
+                        show={settings.show}
+                    />
+                )}
+
+                {/* Streak + weight (each toggled in Settings) */}
+                {(settings.cards.streak || settings.cards.weight) && (
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            gap: Spacing.sm,
+                        }}
+                    >
+                        {settings.cards.streak && (
+                            <Card style={{ flex: 1 }} padding={14}>
+                                <View
+                                    accessible
+                                    accessibilityLabel={`${streak.current} day logging streak`}
+                                >
+                                    <AppText
+                                        variant="label"
+                                        color={Colors.gray500}
+                                    >
+                                        STREAK
+                                    </AppText>
+                                    <View
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{ fontSize: 22 }}
+                                        >
+                                            {streak.current > 0
+                                                ? '🔥'
+                                                : '✨'}
+                                        </Text>
+                                        <AppText variant="h2">
+                                            {streak.current}{' '}
+                                            {streak.current === 1
+                                                ? 'day'
+                                                : 'days'}
+                                        </AppText>
+                                    </View>
+                                    <AppText
+                                        variant="caption"
+                                        color={Colors.gray500}
+                                        numberOfLines={1}
+                                    >
+                                        {streak.loggedToday
+                                            ? 'Logged today'
+                                            : streak.current > 0
+                                              ? 'Log today to keep it'
+                                              : 'Log a meal to start'}
+                                    </AppText>
+                                </View>
+                            </Card>
+                        )}
+
+                        {settings.cards.weight && (
+                            <Pressable
+                                style={{ flex: 1 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                    weight
+                                        ? `Weight ${formatWeight(weight.value, settings.weightUnit)}. Open progress`
+                                        : 'Log weight'
+                                }
+                                onPress={() =>
+                                    router.push(
+                                        weight
+                                            ? '/measurements'
+                                            : '/weight'
+                                    )
+                                }
+                            >
+                                {({ pressed }) => (
+                                    <Card
+                                        padding={14}
+                                        style={{
+                                            flex: 1,
+                                            opacity: pressed
+                                                ? 0.85
+                                                : 1,
+                                        }}
+                                    >
+                                        <AppText
+                                            variant="label"
+                                            color={Colors.gray500}
+                                        >
+                                            WEIGHT
+                                        </AppText>
+                                        <View
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                marginTop: 4,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="scale-outline"
+                                                size={22}
+                                                color={Colors.orange}
+                                            />
+                                            <AppText variant="h2">
+                                                {weight
+                                                    ? formatWeight(
+                                                          weight.value,
+                                                          settings.weightUnit
+                                                      )
+                                                    : '—'}
+                                            </AppText>
+                                        </View>
+                                        <AppText
+                                            variant="caption"
+                                            color={
+                                                weight
+                                                    ? Colors.gray500
+                                                    : Colors.coral
+                                            }
+                                        >
+                                            {weight
+                                                ? 'See progress'
+                                                : '+ Log weight'}
+                                        </AppText>
+                                    </Card>
+                                )}
+                            </Pressable>
+                        )}
+                    </View>
+                )}
+
+                {/* Meals */}
+                <View
                     style={{
-                        backgroundColor: 'green',
-                        padding: 15,
-                        borderRadius: 50,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        marginTop: Spacing.xs,
                     }}
                 >
-                    <Text style={{ color: 'white' }}>Add Meal</Text>
-                </Pressable>
+                    <AppText variant="h2" accessibilityRole="header">
+                        Meals
+                    </AppText>
+                    {entries.length > 0 && (
+                        <AppText
+                            variant="caption"
+                            color={Colors.gray500}
+                        >
+                            {entries.length}{' '}
+                            {entries.length === 1 ? 'item' : 'items'}
+                        </AppText>
+                    )}
+                </View>
+
+                {loading ? (
+                    <ActivityIndicator
+                        color={Colors.coral}
+                        style={{ marginVertical: 30 }}
+                    />
+                ) : entries.length === 0 ? (
+                    <Card variant="outlined">
+                        <EmptyState
+                            emoji="📸"
+                            title={
+                                viewingToday
+                                    ? 'Nothing logged yet'
+                                    : 'Nothing logged this day'
+                            }
+                            message="Snap a photo of what you eat. Macros are optional."
+                            action={
+                                <Button
+                                    title="Snap a meal"
+                                    icon="camera"
+                                    onPress={() =>
+                                        router.push({
+                                            pathname: '/takephoto',
+                                            params: {
+                                                next: 'addfood',
+                                            },
+                                        })
+                                    }
+                                />
+                            }
+                        />
+                    </Card>
+                ) : (
+                    <View style={{ gap: Spacing.sm }}>
+                        {entries.map((entry) => (
+                            <Animated.View
+                                key={entry.id}
+                                entering={FadeIn.duration(200)}
+                                layout={LinearTransition.duration(
+                                    200
+                                )}
+                            >
+                                <FoodCard
+                                    entry={entry}
+                                    compact={
+                                        settings.listStyle ===
+                                        'compact'
+                                    }
+                                    onDelete={handleDelete}
+                                />
+                            </Animated.View>
+                        ))}
+                    </View>
+                )}
+            </ScrollView>
+
+            {/* Bottom actions */}
+            <View
+                pointerEvents="box-none"
+                style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    paddingBottom: insets.bottom + 8,
+                    paddingHorizontal: Spacing.md,
+                    flexDirection: leftHanded ? 'row-reverse' : 'row',
+                    alignItems: 'center',
+                    gap: Spacing.xs,
+                }}
+            >
+                <IconButton
+                    icon="stats-chart"
+                    accessibilityLabel="Progress"
+                    size={52}
+                    floating
+                    color={Colors.orange}
+                    onPress={() => router.push('/measurements')}
+                />
+                <View style={{ flex: 1 }} />
+                <IconButton
+                    icon="camera"
+                    accessibilityLabel="Snap a meal"
+                    size={52}
+                    floating
+                    color={Colors.coral}
+                    onPress={() =>
+                        router.push({
+                            pathname: '/takephoto',
+                            params: { next: 'addfood' },
+                        })
+                    }
+                />
+                <Button
+                    title="Add meal"
+                    icon="add"
+                    size="lg"
+                    floating
+                    onPress={() => router.push('/addfood')}
+                />
             </View>
-        </>
+
+            {undo && (
+                <Toast
+                    message={`Deleted ${undo.name}`}
+                    actionLabel="Undo"
+                    onAction={handleUndo}
+                    bottom={bottomBarHeight + 12}
+                />
+            )}
+        </View>
     )
 }
 
-export default App
+export default Home

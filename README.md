@@ -1,4 +1,45 @@
-# Welcome to your Expo app 👋
+# Diet Mojo
+
+Snap photos of what you eat, track calories/macros and weight.
+_Your food, your mood, your mojo._
+
+## Setup after pulling these changes
+
+New native dependencies were added (fonts, gradients, SVG charts,
+notifications, sharing), so install and rebuild the dev client:
+
+```bash
+npm install
+npx expo install --check      # align versions with the SDK
+npx expo prebuild --clean     # regenerates ios/ and android/ with new permissions
+npx expo run:ios              # or: npm run ios
+```
+
+Useful scripts: `npm run typecheck`, `npm run lint`.
+
+## Project map
+
+- `app/` – screens (expo-router). `index` home, `addfood`/`editfood` meal form,
+  `takephoto` camera, `calendar`, `measurements` (progress), `weight`, `settings`.
+- `components/ui/` – brand primitives (AppText, Button, Card, TextField, Chip,
+  Segmented, IconButton, SheetHeader, Toast, EmptyState).
+- `constants/theme.ts` – brand tokens from the brand guide.
+- `lib/` – data access (`entries`, `measurements`), `photos` (persistent
+  storage), `settings` (kv-store), `notifications`, `dataTools` (export/erase),
+  `date` (local-time helpers).
+- `database/` – migrations (run on launch via `SQLiteProvider`).
+
+### Data conventions
+
+- Timestamps are **local time** strings: `YYYY-MM-DDTHH:mm:ss`.
+  Query by day with `substr(col, 1, 10)`.
+- Photos are stored in `<documents>/photos`, and the DB keeps the relative path.
+  Use `resolvePhotoUri()` to display one.
+- Weight is stored in **kg** and converted for display.
+
+---
+
+## Expo notes
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 

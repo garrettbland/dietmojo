@@ -1,57 +1,80 @@
-// import { Link } from "expo-router";
-import { useDate } from "@/providers/DateProvider";
-import { useRouter } from "expo-router";
-import { Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import DateTimePicker, {
-  DateType,
-  useDefaultStyles,
-} from "react-native-ui-datepicker";
-
-// import { ThemedText } from '@/components/themed-text';
-// import { ThemedView } from '@/components/themed-view';
+import { MonthCalendar } from '@/components/MonthCalendar'
+import { AppText } from '@/components/ui/AppText'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
+import { Colors, Spacing } from '@/constants/theme'
+import { addDays } from '@/lib/date'
+import { getLoggedDays, getStreak } from '@/lib/entries'
+import { useDate } from '@/providers/DateProvider'
+import { useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { Text, View } from 'react-native'
 
 export default function Calendar() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const defaultStyles = useDefaultStyles();
-  const { date, setDate } = useDate();
+    const router = useRouter()
+    const { date, setDate } = useDate()
+    const [logged, setLogged] = useState<Set<string>>(new Set())
+    const [streak, setStreak] = useState(0)
 
-  const handleDateSelect = (newDate: DateType) => {
-    setDate(newDate as Date);
-    router.dismiss();
-  };
+    useEffect(() => {
+        const today = new Date()
+        getLoggedDays(addDays(today, -730), today).then(setLogged)
+        getStreak().then((s) => setStreak(s.current))
+    }, [])
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "blue" }}>
-      {/* Nav */}
-      <View
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          backgroundColor: "red",
-        }}
-      >
-        <Text>History</Text>
-        <Text onPress={() => router.dismiss()}>X</Text>
-      </View>
+    const select = (d: Date) => {
+        setDate(d)
+        router.back()
+    }
 
-      {/* Legend */}
-      <View>
-        <Text>✅ Successful day, 📝 has entries</Text>
-      </View>
+    return (
+        <View
+            style={{
+                flex: 1,
+                backgroundColor: Colors.white,
+                paddingHorizontal: Spacing.lg,
+                paddingTop: Spacing.xl,
+            }}
+        >
+            <View
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: Spacing.xs,
+                }}
+            >
+                <View>
+                    <AppText variant="h2">History</AppText>
+                    <AppText variant="caption" color={Colors.gray500}>
+                        <Text style={{ color: Colors.orange }}>
+                            ●
+                        </Text>{' '}
+                        days with meals · 🔥 {streak} day streak
+                    </AppText>
+                </View>
+                <IconButton
+                    icon="close"
+                    accessibilityLabel="Close"
+                    background={Colors.gray50}
+                    size={38}
+                    onPress={() => router.back()}
+                />
+            </View>
 
-      {/* Calendar view */}
-      <View>
-        <DateTimePicker
-          mode="single"
-          date={date}
-          onChange={({ date: newDate }) => handleDateSelect(newDate)}
-          styles={defaultStyles}
-        />
-      </View>
-    </View>
-  );
+            <MonthCalendar
+                value={date}
+                onSelect={select}
+                markedDays={logged}
+            />
+
+            <Button
+                title="Jump to today"
+                variant="ghost"
+                icon="today-outline"
+                style={{ marginTop: Spacing.sm }}
+                onPress={() => select(new Date())}
+            />
+        </View>
+    )
 }

@@ -1,143 +1,207 @@
+import { Colors, Radius } from '@/constants/theme'
+import { haptic } from '@/lib/haptics'
+import { resolvePhotoUri } from '@/lib/photos'
+import Ionicons from '@expo/vector-icons/Ionicons'
+import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
-import {
-    useLocalSearchParams,
-    usePathname,
-    useRouter,
-} from 'expo-router'
-import { Image, Pressable, Text, View } from 'react-native'
+import { useRouter } from 'expo-router'
+import { ComponentProps } from 'react'
+import { Alert, Linking, Pressable, View } from 'react-native'
+import { AppText } from './ui/AppText'
+
+export const pickFromLibrary = async (): Promise<string | null> => {
+    const perm =
+        await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted && perm.accessPrivileges !== 'limited') {
+        Alert.alert(
+            'Photo access needed',
+            'Allow photo access in Settings to choose meal photos.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Open Settings',
+                    onPress: () => Linking.openSettings(),
+                },
+            ]
+        )
+        return null
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+    })
+    return result.canceled ? null : result.assets[0].uri
+}
+
+const Option = ({
+    icon,
+    label,
+    onPress,
+}: {
+    icon: ComponentProps<typeof Ionicons>['name']
+    label: string
+    onPress: () => void
+}) => (
+    <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+            haptic.light()
+            onPress()
+        }}
+        style={({ pressed }) => ({
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            borderRadius: Radius.lg,
+            backgroundColor: pressed
+                ? Colors.coralTint
+                : Colors.white,
+        })}
+    >
+        <View
+            style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: Colors.coralTint,
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            <Ionicons name={icon} size={24} color={Colors.coral} />
+        </View>
+        <AppText variant="label" color={Colors.gray700}>
+            {label}
+        </AppText>
+    </Pressable>
+)
 
 /**
- * Grabbed this from the expo docs. Does it even work?
- * https://docs.expo.dev/versions/latest/sdk/image/#usage
- */
-const blurhash =
-    '|rF?hV%2WCj[ayj[a|j[az_NaeWBj@ayfRayfQfQM{M|azj[azf6fQfQfQIpWXofj[ayj[j[fQayWCoeoeaya}j[ayfQa{oLj?j[WVj[ayayj[fQoff7azayj[ayj[j[ayofayayayj[fQj[ayayj[ayfjj[j[ayjuayj['
-
-/**
- * Image Selector component that shows user the "take photo" or "select photo" options. When
- * they select an image, the preview will show. Also handles allowing the user to remove the
- * image selected. This component is used in the add food and edit food screens
+ * Photo area for the food form: take/choose a photo, or preview it
+ * with replace/remove controls.
  */
 export const ImageSelector = ({
-    previewUri,
-    setPreviewUri,
+    photo,
+    onChange,
 }: {
-    previewUri: string | null
-    setPreviewUri: (uri: string | null) => void
+    /** Stored relative path or a temporary file URI */
+    photo: string | null
+    onChange: (uri: string | null) => void
 }) => {
     const router = useRouter()
-    const pathname = usePathname()
-    const currentParams = useLocalSearchParams()
 
-    const handleChooseImage = async () => {
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: false,
-            quality: 0,
-            allowsMultipleSelection: false,
-        })
+    const openCamera = () => router.push('/takephoto')
 
-        if (!result.canceled) {
-            setPreviewUri(result.assets[0].uri)
-        } else {
-            alert('You did not select any image.')
-        }
+    const choose = async () => {
+        const uri = await pickFromLibrary()
+        if (uri) onChange(uri)
     }
+
+    const uri = resolvePhotoUri(photo)
+
+    if (!uri) {
+        return (
+            <View
+                style={{
+                    height: 170,
+                    flexDirection: 'row',
+                    gap: 8,
+                    padding: 8,
+                    borderRadius: Radius.xl,
+                    borderWidth: 1.5,
+                    borderStyle: 'dashed',
+                    borderColor: Colors.gray300,
+                    backgroundColor: Colors.gray50,
+                }}
+            >
+                <Option
+                    icon="camera"
+                    label="Take photo"
+                    onPress={openCamera}
+                />
+                <Option
+                    icon="images"
+                    label="Choose photo"
+                    onPress={choose}
+                />
+            </View>
+        )
+    }
+
     return (
-        <View style={{}}>
-            {/** Photo Options */}
-            {!previewUri && (
-                <View
-                    style={{
-                        flexDirection: 'row',
-                    }}
-                >
-                    {/** Take Photo */}
+        <View
+            style={{
+                aspectRatio: 4 / 3,
+                borderRadius: Radius.xl,
+                overflow: 'hidden',
+                backgroundColor: Colors.gray100,
+            }}
+        >
+            <Image
+                source={{ uri }}
+                style={{ flex: 1 }}
+                contentFit="cover"
+                transition={200}
+                accessibilityLabel="Meal photo"
+            />
+            <View
+                style={{
+                    position: 'absolute',
+                    right: 10,
+                    bottom: 10,
+                    flexDirection: 'row',
+                    gap: 8,
+                }}
+            >
+                {(
+                    [
+                        {
+                            icon: 'camera',
+                            label: 'Retake',
+                            onPress: openCamera,
+                        },
+                        {
+                            icon: 'images',
+                            label: 'Replace',
+                            onPress: choose,
+                        },
+                        {
+                            icon: 'trash',
+                            label: 'Remove photo',
+                            onPress: () => onChange(null),
+                        },
+                    ] as const
+                ).map((b) => (
                     <Pressable
-                        style={{
-                            width: '50%',
-                            height: 150,
-                        }}
+                        key={b.label}
+                        accessibilityRole="button"
+                        accessibilityLabel={b.label}
                         onPress={() => {
-                            router.navigate({
-                                pathname: '/takephoto',
-                                params: {
-                                    ...currentParams,
-                                    returnToPathName: pathname, // Pass the current path so we know where to return after taking photo
-                                },
-                            })
+                            haptic.light()
+                            b.onPress()
                         }}
+                        style={({ pressed }) => ({
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: pressed
+                                ? 'rgba(0,0,0,0.7)'
+                                : 'rgba(0,0,0,0.5)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        })}
                     >
-                        <View
-                            style={{
-                                flex: 1,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                            }}
-                        >
-                            <Text>Take Photo</Text>
-                        </View>
-                    </Pressable>
-
-                    {/** Choose Image */}
-                    <Pressable
-                        onPress={handleChooseImage}
-                        style={{
-                            width: '50%',
-                            height: 150,
-                        }}
-                    >
-                        <View
-                            style={{
-                                flex: 1,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                            }}
-                        >
-                            <Text>Choose Image</Text>
-                        </View>
-                    </Pressable>
-                </View>
-            )}
-
-            {/** Preview Image */}
-            {previewUri && (
-                <View style={{ alignItems: 'center' }}>
-                    <View
-                        style={{
-                            backgroundColor: 'red',
-                            height: 150,
-                            width: 150,
-                            position: 'relative',
-                        }}
-                    >
-                        <Pressable
-                            onPress={() => setPreviewUri(null)}
-                            style={{
-                                position: 'absolute',
-                                top: 5,
-                                right: 5,
-                                zIndex: 1,
-                                height: 10,
-                                width: 10,
-                                backgroundColor: 'white',
-                            }}
-                        >
-                            <Text>X</Text>
-                        </Pressable>
-                        <Image
-                            source={{ uri: previewUri }}
-                            placeholder={{ blurhash }}
-                            contentFit="cover"
-                            transition={500}
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                            }}
+                        <Ionicons
+                            name={b.icon}
+                            size={18}
+                            color="white"
                         />
-                    </View>
-                </View>
-            )}
+                    </Pressable>
+                ))}
+            </View>
         </View>
     )
 }

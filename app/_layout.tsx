@@ -1,229 +1,148 @@
+import { Colors } from '@/constants/theme'
 import { migrateDbIfNeeded } from '@/database/migrate'
-import { useColorScheme } from '@/hooks/use-color-scheme'
 import { DateProvider } from '@/providers/DateProvider'
-import { Stack, useRouter } from 'expo-router'
+import {
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+    Nunito_900Black,
+} from '@expo-google-fonts/nunito'
+import {
+    NunitoSans_400Regular,
+    NunitoSans_600SemiBold,
+    NunitoSans_700Bold,
+} from '@expo-google-fonts/nunito-sans'
+import { useFonts } from 'expo-font'
+// expo-router ships its own copy of these since SDK 56; it no longer
+// depends on @react-navigation/*.
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
 import { SQLiteProvider } from 'expo-sqlite'
 import { StatusBar } from 'expo-status-bar'
+import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
-// export const unstable_settings = {
-//   anchor: "(tabs)",
-// };
+SplashScreen.preventAutoHideAsync().catch(() => {})
+SplashScreen.setOptions({ duration: 250, fade: true })
 
-export default function RootLayout() {
-    const colorScheme = useColorScheme()
-    const router = useRouter()
-
-    return (
-        <SQLiteProvider
-            databaseName="dietmojo.db"
-            onInit={migrateDbIfNeeded}
-        >
-            <DateProvider>
-                {/* <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}> */}
-                <GestureHandlerRootView>
-                    <Stack>
-                        <Stack.Screen
-                            name="index"
-                            options={{
-                                headerShown: false,
-                            }}
-                        />
-                        <Stack.Screen
-                            name="calendar"
-                            options={{
-                                presentation: 'formSheet',
-                                sheetAllowedDetents: [0.6],
-                                sheetGrabberVisible: true,
-                                title: 'Date',
-                                headerShown: true,
-                                // headerRight: () => (
-                                //   // <Button title="Close" onPress={() => router.dismiss()} />
-                                //   <Pressable
-                                //     onPress={() => router.dismiss()}
-                                //     style={{
-                                //       height: 36, // somethiing about a height and width of 36 centers
-                                //       width: 36,
-                                //       display: "flex",
-                                //       justifyContent: "center",
-                                //       alignItems: "center",
-                                //     }}
-                                //   >
-                                //     <IconSymbol size={26} name="checkmark" color={"black"} />
-                                //   </Pressable>
-                                // ),
-                            }}
-                        />
-                        <Stack.Screen
-                            name="measurements"
-                            options={{
-                                presentation: 'modal',
-                                title: 'Measurements',
-                                headerShown: false,
-                            }}
-                        />
-                        <Stack.Screen
-                            name="weight"
-                            options={{
-                                presentation: 'modal',
-                                title: 'Weight',
-                                headerShown: false,
-                            }}
-                        />
-                        <Stack.Screen
-                            name="addfood"
-                            options={{
-                                presentation: 'formSheet',
-                                sheetAllowedDetents: [0.6, 1],
-                                title: 'Add Food',
-                                headerTransparent: true,
-                                sheetGrabberVisible: true,
-                                contentStyle: {
-                                    backgroundColor: '#fff', // This removes the glow
-                                },
-                                // headerRight: () => (
-                                //   // <Button title="Close" onPress={() => router.dismiss()} />
-                                //   <Pressable
-                                //     onPress={() => router.dismiss()}
-                                //     style={{
-                                //       height: 36, // somethiing about a height and width of 36 centers
-                                //       width: 36,
-                                //       display: "flex",
-                                //       justifyContent: "center",
-                                //       alignItems: "center",
-                                //     }}
-                                //   >
-                                //     {/* <IconSymbol size={26} name="xmark" color={"black"} /> */}
-                                //     <IconSymbol size={26} name="checkmark" color={"black"} />
-                                //   </Pressable>
-                                // ),
-                            }}
-                        />
-                        <Stack.Screen
-                            name="editfood"
-                            options={{
-                                presentation: 'formSheet',
-                                sheetAllowedDetents: [0.6, 1],
-                                title: 'Edit Food',
-                                headerTransparent: true,
-                                sheetGrabberVisible: true,
-                                contentStyle: {
-                                    backgroundColor: '#fff', // This removes the glow
-                                },
-                            }}
-                        />
-                        <Stack.Screen
-                            name="takephoto"
-                            options={{
-                                presentation: 'modal',
-                                title: 'Take Photo',
-                                headerShown: false,
-                            }}
-                        />
-                        <Stack.Screen
-                            name="settings"
-                            options={{
-                                presentation: 'modal',
-                                headerShown: false,
-                                // headerTransparent: true,
-                                // headerTitle: 'Settings',
-                                // headerLargeTitleEnabled: true,
-                                // headerBackButtonDisplayMode:
-                                //     'minimal',
-                                // headerTransparent: true,
-                                //headerBlurEffect: "systemMaterial",
-                            }}
-                        />
-                    </Stack>
-                </GestureHandlerRootView>
-            </DateProvider>
-            <StatusBar style="auto" />
-        </SQLiteProvider>
-    )
+const navTheme = {
+    ...DefaultTheme,
+    colors: {
+        ...DefaultTheme.colors,
+        primary: Colors.coral,
+        background: Colors.background,
+        card: Colors.white,
+        text: Colors.text,
+        border: Colors.border,
+    },
 }
 
-// Initialize database schema
-async function oldmigrateDbIfNeeded(db) {
-    // Increment this for each migration
-    const TOTAL_MIGRATIONS = migrations.length
+export default function RootLayout() {
+    const [fontsLoaded, fontError] = useFonts({
+        Nunito_600SemiBold,
+        Nunito_700Bold,
+        Nunito_800ExtraBold,
+        Nunito_900Black,
+        NunitoSans_400Regular,
+        NunitoSans_600SemiBold,
+        NunitoSans_700Bold,
+    })
 
-    console.log(`Latest migration version: ${TOTAL_MIGRATIONS}`)
+    const ready = fontsLoaded || !!fontError
 
-    /**
-     * Have to use user_version to track the users current migration version.
-     */
-    let { user_version: USERS_CURRENT_MIGRATION } =
-        await db.getFirstAsync('PRAGMA user_version')
+    useEffect(() => {
+        if (ready) SplashScreen.hideAsync().catch(() => {})
+    }, [ready])
 
-    console.log(
-        `Users current migration version: ${USERS_CURRENT_MIGRATION}`
+    if (!ready) return null
+
+    return (
+        <GestureHandlerRootView
+            style={{ flex: 1, backgroundColor: Colors.background }}
+        >
+            <SQLiteProvider
+                databaseName="dietmojo.db"
+                onInit={migrateDbIfNeeded}
+            >
+                <DateProvider>
+                    <ThemeProvider value={navTheme}>
+                        <Stack
+                            screenOptions={{
+                                headerShown: false,
+                                contentStyle: {
+                                    backgroundColor:
+                                        Colors.background,
+                                },
+                            }}
+                        >
+                            <Stack.Screen name="index" />
+                            <Stack.Screen
+                                name="calendar"
+                                options={{
+                                    presentation: 'formSheet',
+                                    sheetAllowedDetents: [0.72],
+                                    sheetGrabberVisible: true,
+                                    sheetCornerRadius: 24,
+                                    contentStyle: {
+                                        backgroundColor: Colors.white,
+                                    },
+                                }}
+                            />
+                            <Stack.Screen
+                                name="addfood"
+                                options={{ presentation: 'modal' }}
+                            />
+                            <Stack.Screen
+                                name="editfood"
+                                options={{ presentation: 'modal' }}
+                            />
+                            <Stack.Screen
+                                name="takephoto"
+                                options={{
+                                    presentation: 'fullScreenModal',
+                                    animation: 'fade',
+                                    contentStyle: {
+                                        backgroundColor: '#000',
+                                    },
+                                }}
+                            />
+                            <Stack.Screen
+                                name="measurements"
+                                options={{ presentation: 'modal' }}
+                            />
+                            <Stack.Screen
+                                name="weight"
+                                options={{
+                                    presentation: 'formSheet',
+                                    sheetAllowedDetents: [0.6],
+                                    sheetGrabberVisible: true,
+                                    sheetCornerRadius: 24,
+                                    contentStyle: {
+                                        backgroundColor: Colors.white,
+                                    },
+                                }}
+                            />
+                            <Stack.Screen
+                                name="settings"
+                                options={{ presentation: 'modal' }}
+                            />
+                            <Stack.Screen
+                                name="share"
+                                options={{ presentation: 'modal' }}
+                            />
+                            <Stack.Screen
+                                name="database"
+                                options={{
+                                    headerShown: true,
+                                    title: 'Database',
+                                }}
+                            />
+                        </Stack>
+                    </ThemeProvider>
+                </DateProvider>
+                <StatusBar style="dark" />
+            </SQLiteProvider>
+        </GestureHandlerRootView>
     )
-
-    if (USERS_CURRENT_MIGRATION >= TOTAL_MIGRATIONS) {
-        console.log(
-            'No migration needed, user has latest migration changes'
-        )
-        return
-    }
-
-    // Run pending migrations
-    for (let i = USERS_CURRENT_MIGRATION; i < TOTAL_MIGRATIONS; i++) {
-        console.log(`Running migration ${i}: ${migrations[i].name}`)
-
-        try {
-            // Start transaction
-            await db.execAsync('BEGIN TRANSACTION')
-
-            // Run migration
-            await migrations[i].run(db)
-
-            // Update version within transaction
-            await db.execAsync(`PRAGMA user_version = ${i + 1}`)
-
-            // Commit
-            await db.execAsync('COMMIT')
-
-            console.log(`✓ Migration ${i} completed`)
-        } catch (error) {
-            // Rollback on error
-            await db.execAsync('ROLLBACK')
-            console.error(`✗ Migration ${i} failed:`, error)
-            throw error
-        }
-    }
-
-    // V1: Initial schema
-    // if (currentDbVersion === 0) {
-    //   console.log("Running migration: V1 - Initial schema");
-    //   await db.execAsync(`
-    //     CREATE TABLE IF NOT EXISTS ${TABLE_NAMES.FOOD_ENTRIES} (
-    //       id INTEGER PRIMARY KEY AUTOINCREMENT,
-    //       name TEXT NOT NULL,
-    //       date TEXT NOT NULL,
-    //       photo_uri TEXT,
-    //       notes TEXT,
-    //       created_at INTEGER DEFAULT (strftime('%s', 'now'))
-    //     );
-
-    //     CREATE INDEX IF NOT EXISTS idx_food_date ON ${TABLE_NAMES.FOOD_ENTRIES}(date);
-    //   `);
-
-    //   currentDbVersion = 1;
-    // }
-
-    // migration 3: Add nutrition columns
-    // if (currentDbVersion < 3) {
-    //   console.log("Running migration: V2 - Add nutrition columns");
-    //   await db.execAsync(`
-    //     ALTER TABLE ${TABLE_NAMES.FOOD_ENTRIES} ADD COLUMN calories INTEGER;
-    //     ALTER TABLE ${TABLE_NAMES.FOOD_ENTRIES} ADD COLUMN protein INTEGER;
-    //     ALTER TABLE ${TABLE_NAMES.FOOD_ENTRIES} ADD COLUMN carbs INTEGER;
-    //     ALTER TABLE ${TABLE_NAMES.FOOD_ENTRIES} ADD COLUMN fat INTEGER;
-    //   `);
-    //   currentDbVersion = 4;
-    // }
-
-    // Set the user_version to the latest
-    console.log(`Database migrated to version ${TOTAL_MIGRATIONS}`)
 }

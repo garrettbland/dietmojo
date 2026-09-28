@@ -1,48 +1,55 @@
 /**
- * Type used for food entries in the app. This should match the schema defined in the database migrations.
+ * Food entry row. Matches the schema in database/migrations.ts.
+ * Timestamps are local time: "YYYY-MM-DDTHH:mm:ss".
  */
 export type FoodEntry = {
     id: number
     name: string
+    /** Relative path ("photos/meal_x.jpg"); use resolvePhotoUri() */
     photo_uri: string | null
     notes: string | null
-    consumed_at: string // YYYY-MM-DD
-    calories: number
-    protein: number
-    carbs: number
-    fat: number
+    consumed_at: string
+    calories: number | null
+    protein: number | null
+    carbs: number | null
+    fat: number | null
+    fiber: number | null
     category: string | null
-    created_at: string // YYYY-MM-DD
-    updated_at: string // YYYY-MM-DD (automatically updated with sqlite trigger)
+    created_at: string
+    updated_at: string
 }
 
+export type NewFoodEntry = Omit<
+    FoodEntry,
+    'id' | 'created_at' | 'updated_at'
+>
+
+export type MeasurementType =
+    'WEIGHT' | 'WAIST' | 'ABDOMEN' | 'HIPS' | 'PHOTO'
+
 /**
- * Measurements entry type, used for tracking weight or other progress metrics. This is currently unused but can be implemented in the future.
- * TO DO: How does apple health store this?
+ * Measurement row. WEIGHT values are stored in kilograms.
  */
 export type MeasurementEntry = {
     id: number
-    measured_at: string // YYYY-MM-DD
-    type: 'WEIGHT' | 'WAIST' | 'ABDOMEN' | 'HIPS' | 'PHOTO' // This can be expanded in the future as needed
-    value: number | string
-    created_at: string // YYYY-MM-DD
-    updated_at: string // YYYY-MM-DD (automatically updated with sqlite trigger)
+    measured_at: string
+    type: MeasurementType
+    value: number
+    created_at: string
+    updated_at: string
 }
 
 /**
- * Type used for user settings. This can be expanded in the future as needed. Stored locally using expo-secure-store or similar.
- */
-export type Settings = {
-    theme: 'light' | 'dark' | 'system'
-}
-
-/**
- * Food Input Type
+ * Form state for the add/edit food screens. Numbers are kept as
+ * strings while typing so "1." and "" behave naturally.
  */
 export type FoodInputsType = {
     foodName: string
-    calories: number
-    protein: number
-    carbs: number
-    fat: number
+    calories: string
+    protein: string
+    carbs: string
+    fat: string
+    fiber: string
+    notes: string
+    category: string
 }

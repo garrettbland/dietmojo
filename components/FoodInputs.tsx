@@ -1,151 +1,132 @@
+import { Categories, Colors, Spacing } from '@/constants/theme'
+import { NUTRIENTS, useSettings } from '@/lib/settings'
+import { sanitizeDecimal } from '@/lib/units'
 import { FoodInputsType } from '@/types/types'
-import { Text, TextInput, View } from 'react-native'
+import { useRef } from 'react'
+import { ScrollView, TextInput, View } from 'react-native'
+import { AppText } from './ui/AppText'
+import { Chip } from './ui/Chip'
+import { TextField } from './ui/TextField'
+
+// Same list the home screen and Settings use, so adding a nutrient
+// only has to happen in one place.
+const MACROS = NUTRIENTS
 
 export const FoodInputs = ({
     foodInputs,
     setFoodInputs,
+    nameError,
 }: {
     foodInputs: FoodInputsType
     setFoodInputs: React.Dispatch<
         React.SetStateAction<FoodInputsType>
     >
+    nameError?: string
 }) => {
+    const { trackNutrition } = useSettings()
+    const refs = useRef<Record<string, TextInput | null>>({})
+    const set = (patch: Partial<FoodInputsType>) =>
+        setFoodInputs((prev) => ({ ...prev, ...patch }))
+
     return (
-        <View>
-            {/* Food name */}
-            <View style={{}}>
-                <Text>Food name</Text>
-                <TextInput
-                    style={{
-                        height: 40,
-                        borderColor: 'gray',
-                        borderWidth: 1,
-                    }}
-                    onChangeText={(text) =>
-                        setFoodInputs((prev) => ({
-                            ...prev,
-                            foodName: text,
-                        }))
-                    }
-                    placeholder="What did you eat?"
-                    returnKeyType="done"
-                    value={foodInputs.foodName}
-                />
+        <View style={{ gap: Spacing.lg }}>
+            <TextField
+                label="What did you eat?"
+                placeholder="e.g. Chicken burrito bowl"
+                value={foodInputs.foodName}
+                onChangeText={(foodName) => set({ foodName })}
+                autoCapitalize="sentences"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => refs.current.calories?.focus()}
+                error={nameError}
+                maxLength={80}
+            />
+
+            <View style={{ gap: 8 }}>
+                <AppText variant="label" color={Colors.gray700}>
+                    Meal
+                </AppText>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ gap: 8 }}
+                >
+                    {Categories.map((c) => (
+                        <Chip
+                            key={c.key}
+                            label={c.label}
+                            emoji={c.emoji}
+                            selected={foodInputs.category === c.key}
+                            onPress={() => set({ category: c.key })}
+                        />
+                    ))}
+                </ScrollView>
             </View>
 
-            {/* Optional macros inputs */}
-            <View>
-                <Text>Add Macros (Optional)</Text>
-                <View
-                    style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                    }}
-                >
+            {trackNutrition && (
+                <View style={{ gap: 8 }}>
+                    <AppText variant="label" color={Colors.gray700}>
+                        Nutrition{' '}
+                        <AppText
+                            variant="caption"
+                            color={Colors.gray500}
+                        >
+                            (optional)
+                        </AppText>
+                    </AppText>
                     <View
                         style={{
-                            width: '50%',
-                            paddingRight: 5,
+                            flexDirection: 'row',
+                            flexWrap: 'wrap',
+                            rowGap: Spacing.sm,
+                            columnGap: Spacing.sm,
                         }}
                     >
-                        <Text>Calories</Text>
-                        <TextInput
-                            style={{
-                                height: 40,
-                                borderColor: 'gray',
-                                borderWidth: 1,
-                            }}
-                            onChangeText={(text) =>
-                                setFoodInputs((prev) => ({
-                                    ...prev,
-                                    calories: Number(text),
-                                }))
-                            }
-                            placeholder="0"
-                            keyboardType="numeric"
-                            value={foodInputs.calories.toString()}
-                        />
-                    </View>
-
-                    {/* Protein */}
-                    <View
-                        style={{
-                            width: '50%',
-                            paddingLeft: 5,
-                        }}
-                    >
-                        <Text>Protein (grams)</Text>
-                        <TextInput
-                            style={{
-                                height: 40,
-                                borderColor: 'gray',
-                                borderWidth: 1,
-                            }}
-                            onChangeText={(text) =>
-                                setFoodInputs((prev) => ({
-                                    ...prev,
-                                    protein: Number(text),
-                                }))
-                            }
-                            placeholder="0"
-                            keyboardType="numeric"
-                            value={foodInputs.protein.toString()}
-                        />
-                    </View>
-
-                    {/* Carbs */}
-                    <View
-                        style={{
-                            width: '50%',
-                            paddingRight: 5,
-                        }}
-                    >
-                        <Text>Carbs (grams)</Text>
-                        <TextInput
-                            style={{
-                                height: 40,
-                                borderColor: 'gray',
-                                borderWidth: 1,
-                            }}
-                            onChangeText={(text) =>
-                                setFoodInputs((prev) => ({
-                                    ...prev,
-                                    carbs: Number(text),
-                                }))
-                            }
-                            placeholder="0"
-                            keyboardType="numeric"
-                            value={foodInputs.carbs.toString()}
-                        />
-                    </View>
-
-                    {/* Fat */}
-                    <View
-                        style={{
-                            width: '50%',
-                            paddingRight: 5,
-                        }}
-                    >
-                        <Text>Fat (grams)</Text>
-                        <TextInput
-                            style={{
-                                height: 40,
-                                borderColor: 'gray',
-                                borderWidth: 1,
-                            }}
-                            onChangeText={(text) =>
-                                setFoodInputs((prev) => ({
-                                    ...prev,
-                                    fat: Number(text),
-                                }))
-                            }
-                            placeholder="0"
-                            keyboardType="numeric"
-                            value={foodInputs.fat.toString()}
-                        />
+                        {MACROS.map((m, i) => (
+                            <View
+                                key={m.key}
+                                style={{ width: '48%', flexGrow: 1 }}
+                            >
+                                <TextField
+                                    ref={(r) => {
+                                        refs.current[m.key] = r
+                                    }}
+                                    placeholder={m.label}
+                                    accessibilityLabel={`${m.label} in ${m.suffix === 'g' ? 'grams' : 'calories'}`}
+                                    suffix={m.suffix}
+                                    keyboardType="decimal-pad"
+                                    value={foodInputs[m.key]}
+                                    onChangeText={(t) =>
+                                        set({
+                                            [m.key]:
+                                                sanitizeDecimal(t),
+                                        })
+                                    }
+                                    returnKeyType={
+                                        i < MACROS.length - 1
+                                            ? 'next'
+                                            : 'done'
+                                    }
+                                    maxLength={6}
+                                    selectTextOnFocus
+                                />
+                            </View>
+                        ))}
                     </View>
                 </View>
-            </View>
+            )}
+
+            <TextField
+                label="Notes"
+                placeholder="How did it make you feel? Where was it from?"
+                value={foodInputs.notes}
+                onChangeText={(notes) => set({ notes })}
+                multiline
+                style={{ paddingTop: 14, paddingBottom: 14 }}
+                maxLength={500}
+            />
         </View>
     )
 }
