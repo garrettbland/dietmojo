@@ -30,6 +30,7 @@ import { useDate } from '@/providers/DateProvider'
 import { FoodEntry, MeasurementEntry } from '@/types/types'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useFocusEffect, useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -49,6 +50,7 @@ const UNDO_MS = 4000
 
 const Home = () => {
     const router = useRouter()
+    const posthog = usePostHog()
     const insets = useSafeAreaInsets()
     const settings = useSettings()
     const { date, setDate } = useDate()
@@ -129,6 +131,7 @@ const Home = () => {
             load()
             return
         }
+        posthog.capture('food_entry_deleted')
         setUndo(entry)
         undoTimer.current = setTimeout(() => {
             deletePhoto(entry.photo_uri)
@@ -141,6 +144,7 @@ const Home = () => {
         if (!undo) return
         if (undoTimer.current) clearTimeout(undoTimer.current)
         await restoreEntry(undo)
+        posthog.capture('food_entry_restored')
         setUndo(null)
         haptic.success()
         load()

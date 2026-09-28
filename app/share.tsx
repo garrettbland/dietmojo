@@ -7,11 +7,13 @@ import { Colors, Shadow, Spacing } from '@/constants/theme'
 import { formatDayTitle, toDayKey } from '@/lib/date'
 import { getEntriesByDate } from '@/lib/entries'
 import { haptic } from '@/lib/haptics'
+import { posthogLogger } from '@/lib/posthogLogs'
 import { useDate } from '@/providers/DateProvider'
 import { FoodEntry } from '@/types/types'
 import { File, Paths } from 'expo-file-system'
 import { useRouter } from 'expo-router'
 import * as Sharing from 'expo-sharing'
+import { usePostHog } from 'posthog-react-native'
 import { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -27,6 +29,7 @@ const MAX_CARD_WIDTH = 360
 
 const Share = () => {
     const router = useRouter()
+    const posthog = usePostHog()
     const insets = useSafeAreaInsets()
     const { date } = useDate()
     const { width: screenWidth, height: screenHeight } =
@@ -97,6 +100,10 @@ const Share = () => {
                 mimeType: 'image/png',
                 UTI: 'public.png',
                 dialogTitle: `${formatDayTitle(date)} on Diet Mojo`,
+            })
+            posthog.capture('daily_summary_shared')
+            posthogLogger.info('daily summary shared', {
+                share_format: 'png',
             })
         } catch (error) {
             console.error(error)

@@ -26,11 +26,13 @@ import {
 } from '@/lib/units'
 import { useDate } from '@/providers/DateProvider'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import { useEffect, useState } from 'react'
 import { Alert, View } from 'react-native'
 
 const Weight = () => {
     const router = useRouter()
+    const posthog = usePostHog()
     const { date } = useDate()
     const { weightUnit: unit } = useSettings()
     /** Optional "YYYY-MM-DD" — set when opened from a past entry */
@@ -112,6 +114,7 @@ const Weight = () => {
             Alert.alert("Couldn't save", 'Please try again.')
             return
         }
+        posthog.capture('weight_logged')
         haptic.success()
         router.back()
     }

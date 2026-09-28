@@ -1,6 +1,7 @@
 import { Colors } from '@/constants/theme'
 import { migrateDbIfNeeded } from '@/database/migrate'
 import { DateProvider } from '@/providers/DateProvider'
+import { posthog } from '@/lib/posthog'
 import {
     Nunito_600SemiBold,
     Nunito_700Bold,
@@ -19,7 +20,8 @@ import { DefaultTheme, Stack, ThemeProvider } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { SQLiteProvider } from 'expo-sqlite'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect } from 'react'
+import { PostHogProvider } from 'posthog-react-native'
+import { type ReactNode, useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
@@ -36,6 +38,12 @@ const navTheme = {
         text: Colors.text,
         border: Colors.border,
     },
+}
+
+function AnalyticsProvider({ children }: { children: ReactNode }) {
+    if (!posthog) return children
+
+    return <PostHogProvider client={posthog}>{children}</PostHogProvider>
 }
 
 export default function RootLayout() {
@@ -66,80 +74,82 @@ export default function RootLayout() {
                 onInit={migrateDbIfNeeded}
             >
                 <DateProvider>
-                    <ThemeProvider value={navTheme}>
-                        <Stack
-                            screenOptions={{
-                                headerShown: false,
-                                contentStyle: {
-                                    backgroundColor:
-                                        Colors.background,
-                                },
-                            }}
-                        >
-                            <Stack.Screen name="index" />
-                            <Stack.Screen
-                                name="calendar"
-                                options={{
-                                    presentation: 'formSheet',
-                                    sheetAllowedDetents: [0.72],
-                                    sheetGrabberVisible: true,
-                                    sheetCornerRadius: 24,
+                    <AnalyticsProvider>
+                        <ThemeProvider value={navTheme}>
+                            <Stack
+                                screenOptions={{
+                                    headerShown: false,
                                     contentStyle: {
-                                        backgroundColor: Colors.white,
+                                        backgroundColor:
+                                            Colors.background,
                                     },
                                 }}
-                            />
-                            <Stack.Screen
-                                name="addfood"
-                                options={{ presentation: 'modal' }}
-                            />
-                            <Stack.Screen
-                                name="editfood"
-                                options={{ presentation: 'modal' }}
-                            />
-                            <Stack.Screen
-                                name="takephoto"
-                                options={{
-                                    presentation: 'fullScreenModal',
-                                    animation: 'fade',
-                                    contentStyle: {
-                                        backgroundColor: '#000',
-                                    },
-                                }}
-                            />
-                            <Stack.Screen
-                                name="measurements"
-                                options={{ presentation: 'modal' }}
-                            />
-                            <Stack.Screen
-                                name="weight"
-                                options={{
-                                    presentation: 'formSheet',
-                                    sheetAllowedDetents: [0.6],
-                                    sheetGrabberVisible: true,
-                                    sheetCornerRadius: 24,
-                                    contentStyle: {
-                                        backgroundColor: Colors.white,
-                                    },
-                                }}
-                            />
-                            <Stack.Screen
-                                name="settings"
-                                options={{ presentation: 'modal' }}
-                            />
-                            <Stack.Screen
-                                name="share"
-                                options={{ presentation: 'modal' }}
-                            />
-                            <Stack.Screen
-                                name="database"
-                                options={{
-                                    headerShown: true,
-                                    title: 'Database',
-                                }}
-                            />
-                        </Stack>
-                    </ThemeProvider>
+                            >
+                                <Stack.Screen name="index" />
+                                <Stack.Screen
+                                    name="calendar"
+                                    options={{
+                                        presentation: 'formSheet',
+                                        sheetAllowedDetents: [0.72],
+                                        sheetGrabberVisible: true,
+                                        sheetCornerRadius: 24,
+                                        contentStyle: {
+                                            backgroundColor: Colors.white,
+                                        },
+                                    }}
+                                />
+                                <Stack.Screen
+                                    name="addfood"
+                                    options={{ presentation: 'modal' }}
+                                />
+                                <Stack.Screen
+                                    name="editfood"
+                                    options={{ presentation: 'modal' }}
+                                />
+                                <Stack.Screen
+                                    name="takephoto"
+                                    options={{
+                                        presentation: 'fullScreenModal',
+                                        animation: 'fade',
+                                        contentStyle: {
+                                            backgroundColor: '#000',
+                                        },
+                                    }}
+                                />
+                                <Stack.Screen
+                                    name="measurements"
+                                    options={{ presentation: 'modal' }}
+                                />
+                                <Stack.Screen
+                                    name="weight"
+                                    options={{
+                                        presentation: 'formSheet',
+                                        sheetAllowedDetents: [0.6],
+                                        sheetGrabberVisible: true,
+                                        sheetCornerRadius: 24,
+                                        contentStyle: {
+                                            backgroundColor: Colors.white,
+                                        },
+                                    }}
+                                />
+                                <Stack.Screen
+                                    name="settings"
+                                    options={{ presentation: 'modal' }}
+                                />
+                                <Stack.Screen
+                                    name="share"
+                                    options={{ presentation: 'modal' }}
+                                />
+                                <Stack.Screen
+                                    name="database"
+                                    options={{
+                                        headerShown: true,
+                                        title: 'Database',
+                                    }}
+                                />
+                            </Stack>
+                        </ThemeProvider>
+                    </AnalyticsProvider>
                 </DateProvider>
                 <StatusBar style="dark" />
             </SQLiteProvider>

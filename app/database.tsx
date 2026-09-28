@@ -1,4 +1,5 @@
 import { TABLE_NAMES } from '@/constants'
+import { toLocalTimestamp } from '@/lib/date'
 import { useDate } from '@/providers/DateProvider'
 import { useRouter } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
@@ -23,10 +24,35 @@ interface TableRow {
     name: string
 }
 
+/**
+ * Reads every user table with its schema and most recent rows. Pure
+ * data access — it touches no component state, which is what lets the
+ * mount effect call it without tripping the cascading-render rule.
+ */
+const collectTables = async (
+    db: ReturnType<typeof useSQLiteContext>
+): Promise<TableInfo[]> => {
+    const tableList = (await db.getAllAsync(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    )) as TableRow[]
+
+    const tableInfos: TableInfo[] = []
+    for (const tableRow of tableList) {
+        const schema = await db.getAllAsync(
+            `PRAGMA table_info(${tableRow.name})`
+        )
+        const entries = await db.getAllAsync(
+            `SELECT * FROM ${tableRow.name} ORDER BY rowid DESC LIMIT 20`
+        )
+        tableInfos.push({ name: tableRow.name, schema, entries })
+    }
+    return tableInfos
+}
+
 const Database = () => {
     const router = useRouter()
     const db = useSQLiteContext()
-    const { date, setDate } = useDate()
+    const { date } = useDate()
 
     const [tables, setTables] = useState<TableInfo[]>([])
     const [expandedTable, setExpandedTable] = useState<string | null>(
@@ -36,33 +62,7 @@ const Database = () => {
 
     const loadTables = useCallback(async () => {
         try {
-            setLoading(true)
-            // Get all user tables
-            const tableList = await db.getAllAsync(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            )
-
-            const tableInfos: TableInfo[] = []
-
-            for (const tableRow of tableList as TableRow[]) {
-                // Get schema
-                const schema = await db.getAllAsync(
-                    `PRAGMA table_info(${tableRow.name})`
-                )
-
-                // Get last 20 entries
-                const entries = await db.getAllAsync(
-                    `SELECT * FROM ${tableRow.name} ORDER BY rowid DESC LIMIT 20`
-                )
-
-                tableInfos.push({
-                    name: tableRow.name,
-                    schema,
-                    entries,
-                })
-            }
-
-            setTables(tableInfos)
+            setTables(await collectTables(db))
         } catch (error) {
             console.error('Error loading tables:', error)
         } finally {
@@ -70,9 +70,25 @@ const Database = () => {
         }
     }, [db])
 
+    // The read is kept out of the effect body: state is only set from
+    // the promise callback, after the await, so this never cascades a
+    // render. `loading` already starts true, so nothing sets it here.
     useEffect(() => {
-        loadTables()
-    }, [loadTables])
+        let alive = true
+        collectTables(db)
+            .then((next) => {
+                if (alive) setTables(next)
+            })
+            .catch((error) => {
+                console.error('Error loading tables:', error)
+            })
+            .finally(() => {
+                if (alive) setLoading(false)
+            })
+        return () => {
+            alive = false
+        }
+    }, [db])
 
     const addMockData = async () => {
         try {
@@ -136,11 +152,12 @@ const Database = () => {
             ]
 
             for (const food of mockFoods) {
-                console.log(`date of mocked foo`, date)
-                const dateString = date.toISOString().split('T')[0]
+                // Local time, matching the rest of the app —
+                // toISOString() shifts the day across the UTC boundary
+                const dateString = toLocalTimestamp(date)
                 await db.execAsync(`
           INSERT INTO ${TABLE_NAMES.ENTRIES} (name, calories, protein, carbs, fat, consumed_at)
-          VALUES ('${food.name}', ${food.calories}, ${food.protein}, ${food.carbs}, ${food.fat}, ${dateString});
+          VALUES ('${food.name}', ${food.calories}, ${food.protein}, ${food.carbs}, ${food.fat}, '${dateString}');
         `)
             }
 
@@ -281,7 +298,10 @@ const Database = () => {
                     <View style={{ flex: 1 }}>
                         <Button
                             title="Refresh"
-                            onPress={loadTables}
+                            onPress={() => {
+                                setLoading(true)
+                                loadTables()
+                            }}
                         />
                     </View>
                     <View style={{ flex: 1 }}>

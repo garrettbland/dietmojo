@@ -6,11 +6,13 @@ import {
 } from '@/lib/date'
 import { addEntry, deleteEntry, updateEntry } from '@/lib/entries'
 import { haptic } from '@/lib/haptics'
+import { posthogLogger } from '@/lib/posthogLogs'
 import { takePendingPhoto } from '@/lib/photoStore'
 import { deletePhoto, persistPhoto } from '@/lib/photos'
 import { parseNumber } from '@/lib/units'
 import { FoodEntry, FoodInputsType } from '@/types/types'
 import { useFocusEffect, useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import { useCallback, useState } from 'react'
 import {
     Alert,
@@ -50,6 +52,7 @@ export const FoodForm = ({
     initialDay: Date
 }) => {
     const router = useRouter()
+    const posthog = usePostHog()
     const insets = useSafeAreaInsets()
     const isEdit = !!entry
 
@@ -131,6 +134,18 @@ export const FoodForm = ({
 
             if (!res.ok) throw new Error(res.error)
 
+            if (entry) {
+                posthog.capture('food_entry_updated')
+            } else {
+                posthog.capture('food_entry_created', {
+                    has_photo: Boolean(storedPhoto),
+                })
+            }
+            posthogLogger.info('food entry saved', {
+                operation: entry ? 'update' : 'create',
+                has_photo: Boolean(storedPhoto),
+            })
+
             // Clean up a replaced/removed photo
             if (entry?.photo_uri && entry.photo_uri !== storedPhoto) {
                 deletePhoto(entry.photo_uri)
@@ -161,6 +176,7 @@ export const FoodForm = ({
                     onPress: async () => {
                         const res = await deleteEntry(entry)
                         if (res.ok) {
+                            posthog.capture('food_entry_deleted')
                             haptic.success()
                             router.back()
                         } else {

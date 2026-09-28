@@ -8,6 +8,7 @@ import { Colors, Spacing } from '@/constants/theme'
 import { eraseAllData, exportData } from '@/lib/dataTools'
 import { countEntries } from '@/lib/entries'
 import { haptic } from '@/lib/haptics'
+import { posthogLogger } from '@/lib/posthogLogs'
 import {
     cancelReminders,
     formatReminderTime,
@@ -26,6 +27,7 @@ import { parseNumber, sanitizeDecimal } from '@/lib/units'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import { ComponentProps, ReactNode, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
@@ -163,6 +165,7 @@ const shiftTime = (time: string, minutes: number) => {
 
 const SettingsScreen = () => {
     const router = useRouter()
+    const posthog = usePostHog()
     const insets = useSafeAreaInsets()
     const settings = useSettings()
     const [goalText, setGoalText] = useState(() =>
@@ -231,6 +234,10 @@ const SettingsScreen = () => {
         setExporting(true)
         try {
             await exportData()
+            posthog.capture('data_exported')
+            posthogLogger.info('local data export completed', {
+                export_format: 'csv',
+            })
         } catch (error) {
             Alert.alert(
                 'Export failed',
@@ -254,6 +261,7 @@ const SettingsScreen = () => {
                     style: 'destructive',
                     onPress: async () => {
                         await eraseAllData()
+                        posthog.capture('data_erased')
                         haptic.success()
                         setCount(0)
                         Alert.alert('Done', 'All data was erased.')

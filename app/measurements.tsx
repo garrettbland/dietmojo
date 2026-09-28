@@ -17,6 +17,7 @@ import { fromKg } from '@/lib/units'
 import { MeasurementEntry } from '@/types/types'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { useFocusEffect, useRouter } from 'expo-router'
+import { usePostHog } from 'posthog-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import {
     ActivityIndicator,
@@ -38,6 +39,7 @@ const RANGES: { key: Range; label: string; days?: number }[] = [
 
 const Progress = () => {
     const router = useRouter()
+    const posthog = usePostHog()
     const insets = useSafeAreaInsets()
     const { weightUnit: unit } = useSettings()
     const [range, setRange] = useState<Range>('1m')
@@ -90,7 +92,10 @@ const Progress = () => {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        await deleteMeasurement(m.id)
+                        const res = await deleteMeasurement(m.id)
+                        if (res.ok) {
+                            posthog.capture('weight_deleted')
+                        }
                         haptic.success()
                         load()
                     },
