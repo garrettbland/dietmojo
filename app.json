@@ -12,6 +12,36 @@
       "bundleIdentifier": "com.garrettbland.dietmojo",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "E174.1"
+            ]
+          }
+        ],
+        "NSPrivacyTracking": false,
+        "NSPrivacyCollectedDataTypes": []
       }
     },
     "android": {
@@ -22,7 +52,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.garrettbland.dietmojo"
+      "package": "com.garrettbland.dietmojo",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -71,6 +104,12 @@
     },
     "backgroundColor": "#FFF8F4",
     "description": "Track what you eat with photos. Snap a picture of each meal, log macros if you want to, and see your day at a glance.",
-    "primaryColor": "#FF6169"
+    "primaryColor": "#FF6169",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "09305128-986c-4911-a61c-3b42884d46be"
+      }
+    }
   }
 }
